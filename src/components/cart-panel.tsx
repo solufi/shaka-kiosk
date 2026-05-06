@@ -19,6 +19,12 @@ import {
   DoorClosed,
   Package,
 } from 'lucide-react';
+import { PromoInput, type AppliedPromo } from './promo-input';
+import { ReceiptPrompt } from './receipt-prompt';
+
+const MACHINE_ID =
+  (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_MACHINE_ID) ||
+  'default';
 
 const PAYMENT_TIMEOUT_SECONDS = 120;
 const PAYMENT_POLL_INTERVAL_MS = 1000;
@@ -70,10 +76,22 @@ export function CartPanel({
   onClearCart,
   onPurchase,
 }: CartPanelProps) {
-  const total = cartItems.reduce(
+  const subtotal = cartItems.reduce(
     (acc, item) => acc + item.price * item.orderQuantity,
     0
   );
+
+  const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null);
+
+  // Compute discount in dollars (subtotal is in dollars)
+  const discount = appliedPromo
+    ? appliedPromo.discountType === 'percent'
+      ? Math.min(subtotal, (subtotal * appliedPromo.discountValue) / 100)
+      : Math.min(subtotal, appliedPromo.discountValue / 100) // discountValue is in cents
+    : 0;
+
+  const total = Math.max(0, subtotal - discount);
+  const discountCents = Math.round(discount * 100);
 
   const [paymentState, setPaymentState] = useState<PaymentState>('idle');
   const [countdown, setCountdown] = useState(PAYMENT_TIMEOUT_SECONDS);
@@ -81,6 +99,7 @@ export function CartPanel({
   const [doorClosed, setDoorClosed] = useState(false);
   const [dispensingItem, setDispensingItem] = useState<string>('');
   const [placeholderImages, setPlaceholderImages] = useState<PlaceholderImage[]>([]);
+  const [receiptDismissed, setReceiptDismissed] = useState(false);
   const handledRef = useRef(false);
   const cartSnapshotRef = useRef<CartItem[]>([]);
 
@@ -103,6 +122,8 @@ export function CartPanel({
     setPaymentError(null);
     setDoorClosed(false);
     setDispensingItem('');
+    setReceiptDismissed(false);
+    setAppliedPromo(null);
     handledRef.current = false;
     cartSnapshotRef.current = [];
   }, []);
@@ -232,7 +253,13 @@ export function CartPanel({
       const res = await fetch(`${base}/stripe/pay`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items, machineId: 'default' }),
+        body: JSON.stringify({
+          items,
+          machineId: MACHINE_ID,
+          discountCents: discountCents > 0 ? discountCents : undefined,
+          promoCode: appliedPromo?.code,
+          promoId: appliedPromo?.promoId,
+        }),
       });
 
       const data = await res.json();
@@ -254,12 +281,14 @@ export function CartPanel({
 
   useEffect(() => {
     if (paymentState !== 'success_normal') return;
+    // Don't auto-clear until customer has answered the receipt prompt
+    if (!receiptDismissed) return;
     const timer = setTimeout(() => {
       onClearCart();
       resetPayment();
     }, SUCCESS_DISPLAY_MS);
     return () => clearTimeout(timer);
-  }, [paymentState, onClearCart, resetPayment]);
+  }, [paymentState, onClearCart, resetPayment, receiptDismissed]);
 
   useEffect(() => {
     if (paymentState !== 'vend_failed') return;
@@ -272,6 +301,8 @@ export function CartPanel({
 
   useEffect(() => {
     if (paymentState !== 'success_fridge') return;
+    // Wait for receipt prompt to be dismissed before allowing door-close to clear cart
+    if (!receiptDismissed) return;
 
     const pollDoor = async () => {
       try {
@@ -307,7 +338,7 @@ export function CartPanel({
       clearInterval(interval);
       clearTimeout(safetyTimeout);
     };
-  }, [paymentState, onClearCart, resetPayment]);
+  }, [paymentState, onClearCart, resetPayment, receiptDismissed]);
 
   useEffect(() => {
     if (paymentState !== 'waiting') return;
@@ -489,6 +520,14 @@ export function CartPanel({
         </div>
       )}
 
+      {(paymentState === 'success_normal' || paymentState === 'success_fridge') &&
+        !receiptDismissed && (
+          <ReceiptPrompt
+            vendApiBase={getVendApiBase()}
+            onDone={() => setReceiptDismissed(true)}
+          />
+        )}
+
       {paymentState === 'vend_failed' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90">
           <div className="flex flex-col items-center gap-6 text-white">
@@ -616,7 +655,26 @@ export function CartPanel({
         {cartItems.length > 0 && (
           <>
             <Separator />
-            <CardFooter className="flex flex-col gap-4 p-4">
+            <CardFooter className="flex flex-col gap-3 p-4">
+              <PromoInput
+                machineId={MACHINE_ID}
+                applied={appliedPromo}
+                onApply={setAppliedPromo}
+                onRemove={() => setAppliedPromo(null)}
+                disabled={paymentState !== 'idle'}
+              />
+              {appliedPromo && (
+                <div className="flex w-full flex-col gap-1 text-sm">
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Sous-total</span>
+                    <span>${subtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-green-600 font-medium">
+                    <span>Rabais ({appliedPromo.code})</span>
+                    <span>−${discount.toFixed(2)}</span>
+                  </div>
+                </div>
+              )}
               <div className="flex w-full justify-between font-bold text-xl">
                 <span>Total</span>
                 <span>${total.toFixed(2)}</span>
