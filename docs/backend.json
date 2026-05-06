@@ -1,0 +1,247 @@
+{
+  "entities": {
+    "VendingMachine": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "VendingMachine",
+      "type": "object",
+      "description": "Represents a vending machine.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Vending Machine entity."
+        },
+        "location": {
+          "type": "string",
+          "description": "The physical location of the vending machine."
+        },
+        "model": {
+          "type": "string",
+          "description": "The model of the vending machine."
+        },
+        "lastMaintenance": {
+          "type": "string",
+          "description": "The date and time of the last maintenance performed on the vending machine.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "location",
+        "model"
+      ]
+    },
+    "Product": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Product",
+      "type": "object",
+      "description": "Represents a product available in the vending machine.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Product entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the product."
+        },
+        "description": {
+          "type": "string",
+          "description": "A detailed description of the product."
+        },
+        "price": {
+          "type": "number",
+          "description": "The price of the product."
+        },
+        "quantity": {
+          "type": "number",
+          "description": "The available quantity of the product."
+        },
+        "imageId": {
+          "type": "string",
+          "description": "The ID for the placeholder image."
+        },
+        "location": {
+          "type": "string",
+          "description": "The location of the product in the vending machine (e.g., A1, B2). Used for MDB commands."
+        },
+        "order": {
+          "type": "number",
+          "description": "The display order of the product."
+        },
+        "nutrition": {
+          "type": "object",
+          "properties": {
+            "calories": { "type": "number" },
+            "fat": { "type": "string" },
+            "sugar": { "type": "string" },
+            "protein": { "type": "string" }
+          },
+          "required": ["calories", "fat", "sugar", "protein"]
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description",
+        "price",
+        "quantity",
+        "imageId",
+        "location",
+        "order"
+      ]
+    },
+    "Inventory": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Inventory",
+      "type": "object",
+      "description": "Represents the inventory of products in a specific vending machine.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Inventory entity."
+        },
+        "vendingMachineId": {
+          "type": "string",
+          "description": "Reference to VendingMachine. (Relationship: VendingMachine 1:N Inventory)"
+        },
+        "productId": {
+          "type": "string",
+          "description": "Reference to Product. (Relationship: Product 1:N Inventory)"
+        },
+        "quantity": {
+          "type": "number",
+          "description": "The quantity of the product in the vending machine."
+        }
+      },
+      "required": [
+        "id",
+        "vendingMachineId",
+        "productId",
+        "quantity"
+      ]
+    },
+    "Sale": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Sale",
+      "type": "object",
+      "description": "Represents a sale transaction.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Sale entity."
+        },
+        "vendingMachineId": {
+          "type": "string",
+          "description": "Reference to VendingMachine. (Relationship: VendingMachine 1:N Sale)"
+        },
+        "productId": {
+          "type": "string",
+          "description": "Reference to Product. (Relationship: Product 1:N Sale)"
+        },
+        "saleDate": {
+          "type": "object",
+          "description": "The date and time of the sale as a Firestore Timestamp."
+        },
+        "quantity": {
+          "type": "number",
+          "description": "The quantity of the product sold."
+        },
+        "amount": {
+          "type": "number",
+          "description": "The total amount of the sale."
+        }
+      },
+      "required": [
+        "id",
+        "vendingMachineId",
+        "productId",
+        "saleDate",
+        "quantity",
+        "amount"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/vendingMachines/{vendingMachineId}",
+        "definition": {
+          "entityName": "VendingMachine",
+          "schema": {
+            "$ref": "#/backend/entities/VendingMachine"
+          },
+          "description": "Stores vending machine data. Includes properties like location and model.",
+          "params": [
+            {
+              "name": "vendingMachineId",
+              "description": "The unique ID of the vending machine."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/products/{productId}",
+        "definition": {
+          "entityName": "Product",
+          "schema": {
+            "$ref": "#/backend/entities/Product"
+          },
+          "description": "Stores general product information available in the vending machines.",
+          "params": [
+            {
+              "name": "productId",
+              "description": "The unique ID of the product."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/vendingMachines/{vendingMachineId}/inventory/{inventoryId}",
+        "definition": {
+          "entityName": "Inventory",
+          "schema": {
+            "$ref": "#/backend/entities/Inventory"
+          },
+          "description": "Stores the inventory of each vending machine. Each document contains a productId that references a product and the quantity.",
+          "params": [
+            {
+              "name": "vendingMachineId",
+              "description": "The unique ID of the vending machine."
+            },
+            {
+              "name": "inventoryId",
+              "description": "The unique ID of the inventory item."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/vendingMachines/{vendingMachineId}/sales/{saleId}",
+        "definition": {
+          "entityName": "Sale",
+          "schema": {
+            "$ref": "#/backend/entities/Sale"
+          },
+          "description": "Stores sales data for each vending machine.  Each document contains details about the sale, including productId, saleDate, quantity, and amount.",
+          "params": [
+            {
+              "name": "vendingMachineId",
+              "description": "The unique ID of the vending machine."
+            },
+            {
+              "name": "saleId",
+              "description": "The unique ID of the sale."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed to support the VendingVerse application's requirements for inventory management, sales tracking, and remote monitoring. The design prioritizes Authorization Independence by avoiding hierarchical authorization and denormalizing authorization-related data. It also enables secure list operations (QAPs) through structural segregation.\n\n1.  **Vending Machines:** Stored in a top-level `/vendingMachines` collection. Each document represents a vending machine and contains its details (location, model, last maintenance). All data needed to decide who has access to the vending machine is stored locally on the document.\n\n2.  **Products:** Stored in a top-level `/products` collection. This collection stores general product information (name, description, image URL, price, location). This allows for easy reuse across multiple vending machines.\n\n3.  **Inventory:** Stored in a `/vendingMachines/{vendingMachineId}/inventory/{inventoryId}` subcollection. This subcollection holds the inventory of each vending machine. Each inventory document contains the `productId` to reference a product stored in the `/products` collection, and the quantity. This allows tracking product levels within a particular vending machine.\n\n4.  **Sales:** Sales data will be stored in the `/vendingMachines/{vendingMachineId}/sales/{saleId}` subcollection. The sales document will store the `productId`, `saleDate`, `quantity`, and `amount`.  Storing Sales data in the vending machine document improves data locality and provides data isolation for secure list operations, which is a major concern with Firestore.\n\n**Authorization Independence:**  The structure does not require hierarchical authorization. Security rules can directly assess the content of the documents in the inventory and sales subcollections without needing to fetch the vending machine document.\n\n**QAPs (Rules are not Filters):** The chosen structure facilitates secure list operations (QAPs). The segregation of data into separate top-level collections (`/vendingMachines`, `/products`) and subcollections (`/vendingMachines/{vendingMachineId}/inventory`, `/vendingMachines/{vendingMachineId}/sales`) ensures that security rules can be applied efficiently without filtering based on document content.\n\n**Remote Monitoring & AI**: With the inventory management being stored at `/vendingMachines/{vendingMachineId}/inventory/{inventoryId}` a remote AI model can easily keep track of product quantities in real-time.\n"
+  }
+}

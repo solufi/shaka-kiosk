@@ -1,0 +1,112 @@
+/**
+ * @fileoverview Firestore Security Rules for the VendingVerse application.
+ *
+ * Core Philosophy:
+ * This ruleset prioritizes Authorization Independence, enabling secure list operations
+ * and real-time monitoring by remote AI models. It enforces strict data ownership
+ * and prevents unauthorized access to sensitive information.
+ *
+ * Data Structure:
+ * - /vendingMachines/{vendingMachineId}: Stores vending machine data.
+ * - /products/{productId}: Stores general product information.
+ * - /vendingMachines/{vendingMachineId}/inventory/{inventoryId}: Stores inventory data for each vending machine.
+ * - /vendingMachines/{vendingMachineId}/sales/{saleId}: Stores sales data for each vending machine.
+ *
+ * Key Security Decisions:
+ * - Public read access to the /products collection.
+ * - Ownership-based access control for vending machines, inventory, and sales data.
+ * - Prevention of unauthorized data modification or deletion.
+ *
+ * Denormalization for Authorization:
+ *  This ruleset does not require denormalization because the data structure already
+ *  supports Authorization Independence. Security rules can directly assess the
+ *  content of documents without needing to fetch related documents.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * @description Grants access to vending machine data based on ownership.
+     * @path /vendingMachines/{vendingMachineId}
+     * @allow (get, list): Any signed-in user can read a vending machine's data.
+     * @allow (create, update, delete): Only the owner (creator) can modify or delete a vending machine.
+     * @deny (create): A user attempts to create a vending machine with an ID that doesn't match their auth UID.
+     * @principle Enforces document ownership for writes, allows public reads.
+     */
+    match /vendingMachines/{vendingMachineId} {
+      function isOwner(vendingMachineId) {
+        return request.auth != null && request.auth.uid == vendingMachineId;
+      }
+      function isExistingOwner(vendingMachineId) {
+        return isOwner(vendingMachineId) && resource != null;
+      }
+
+      allow get, list: if true;
+      allow create: if isOwner(vendingMachineId);
+      allow update: if isExistingOwner(vendingMachineId);
+      allow delete: if isExistingOwner(vendingMachineId);
+    }
+
+    /**
+     * @description Grants public read access to product data, and write access to authenticated users.
+     * @path /products/{productId}
+     * @allow (get, list): Any user can read product data.
+     * @allow (create, update, delete): Authenticated users can manage products.
+     * @principle Provides public read access, restricts write access to authenticated users.
+     */
+    match /products/{productId} {
+      allow get, list: if true;
+      allow create, update, delete: if isSignedIn();
+    }
+
+    /**
+     * @description Grants access to inventory data based on ownership of the vending machine.
+     * @path /vendingMachines/{vendingMachineId}/inventory/{inventoryId}
+     * @allow (get, list): Any signed-in user can read inventory data if they own the vending machine.
+     * @allow (create, update, delete): Only the owner of the vending machine can modify inventory data.
+     * @deny (create): A user attempts to create inventory for a vending machine they don't own.
+     * @principle Enforces document ownership for writes, allows owner-only reads.
+     */
+    match /vendingMachines/{vendingMachineId}/inventory/{inventoryId} {
+      function isVendingMachineOwner(vendingMachineId) {
+        return request.auth != null && request.auth.uid == vendingMachineId;
+      }
+      function isExistingVendingMachineOwner(vendingMachineId) {
+        return isVendingMachineOwner(vendingMachineId) && resource != null;
+      }
+
+      allow get, list: if isVendingMachineOwner(vendingMachineId);
+      allow create: if isVendingMachineOwner(vendingMachineId);
+      allow update: if isExistingVendingMachineOwner(vendingMachineId);
+      allow delete: if isExistingVendingMachineOwner(vendingMachineId);
+    }
+
+    /**
+     * @description Grants access to sales data based on ownership of the vending machine.
+     * @path /vendingMachines/{vendingMachineId}/sales/{saleId}
+     * @allow (get, list): Any signed-in user can read sales data if they own the vending machine.
+     * @allow (create, update, delete): Only the owner of the vending machine can modify sales data.
+     * @deny (create): A user attempts to create sales data for a vending machine they don't own.
+     * @principle Enforces document ownership for writes, allows owner-only reads.
+     */
+    match /vendingMachines/{vendingMachineId}/sales/{saleId} {
+      function isVendingMachineOwner(vendingMachineId) {
+        return request.auth != null && request.auth.uid == vendingMachineId;
+      }
+      function isExistingVendingMachineOwner(vendingMachineId) {
+        return isVendingMachineOwner(vendingMachineId) && resource != null;
+      }
+
+      allow get, list: if isVendingMachineOwner(vendingMachineId);
+      allow create: if isVendingMachineOwner(vendingMachineId);
+      allow update: if isExistingVendingMachineOwner(vendingMachineId);
+      allow delete: if isExistingVendingMachineOwner(vendingMachineId);
+    }
+  }
+}
+
+    

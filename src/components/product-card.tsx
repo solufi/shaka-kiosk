@@ -1,0 +1,382 @@
+import Image from 'next/image';
+import type { Product } from '@/lib/types';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+  DialogClose,
+} from '@/components/ui/dialog';
+import { Edit, PlusCircle, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
+import { Separator } from './ui/separator';
+import { useState, useEffect } from 'react';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Input } from './ui/input';
+import { ImageSelector } from './image-selector';
+
+interface PlaceholderImage {
+  id: string;
+  description: string;
+  imageUrl: string;
+  imageHint: string;
+}
+
+interface ProductCardProps {
+  product: Product;
+  placeholderImages?: PlaceholderImage[];
+  onAddToCart: (product: Product) => void;
+  onUpdateProduct: (product: Product) => void;
+  onDeleteProduct: (productId: string) => void;
+  onMove: (productId: string, direction: 'up' | 'down') => void;
+  isFirst: boolean;
+  isLast: boolean;
+}
+
+const formSchema = z.object({
+  name: z.string().min(2, { message: 'Le nom doit contenir au moins 2 caractères.' }),
+  price: z.coerce.number().positive({ message: 'Le prix doit être un nombre positif.' }),
+  quantity: z.coerce.number().int().min(0, { message: 'La quantité ne peut pas être négative.' }),
+  location: z
+    .string()
+    .min(1, { message: "L'emplacement est requis (ex: 10)." })
+    .refine((v) => /^([1-8][0-9])$/.test(v.trim()) || /^([A-H][1-8])$/i.test(v.trim()), {
+      message: "Format invalide. Utilisez 10-89 (ex: 10) ou A1-H8.",
+    }),
+  imageId: z.string().min(1, { message: "L'image est requise." }),
+});
+
+
+export function ProductCard({ product, placeholderImages, onAddToCart, onUpdateProduct, onDeleteProduct, onMove, isFirst, isLast }: ProductCardProps) {
+  const placeholder = (placeholderImages || []).find((p) => p.id === product.imageId);
+  const fallbackExts = ['.webp', '.png', '.jpg'];
+  const [extIdx, setExtIdx] = useState(0);
+  const imageUrl = placeholder ? placeholder.imageUrl : `/images/products/${product.imageId}${fallbackExts[extIdx] || '.webp'}`;
+  const isSoldOut = product.quantity <= 0;
+  const [isDetailViewOpen, setIsDetailViewOpen] = useState(false);
+  const [isEditViewOpen, setIsEditViewOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  
+  useEffect(() => {
+    const checkAdmin = () => {
+      try {
+        const adminStatus = window.localStorage.getItem('shaka:isAdmin') === '1';
+        setIsAdmin(adminStatus);
+      } catch {
+        setIsAdmin(false);
+      }
+    };
+    checkAdmin();
+    window.addEventListener('storage', checkAdmin);
+    window.addEventListener('shaka-admin-changed', checkAdmin);
+    return () => {
+      window.removeEventListener('storage', checkAdmin);
+      window.removeEventListener('shaka-admin-changed', checkAdmin);
+    };
+  }, []);
+
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      name: product.name,
+      price: product.price,
+      quantity: product.quantity,
+      location: product.location,
+      imageId: product.imageId,
+    },
+  });
+
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    await onUpdateProduct({
+      ...product,
+      name: values.name,
+      price: values.price,
+      quantity: values.quantity,
+      location: values.location,
+      imageId: values.imageId,
+    });
+    setIsEditViewOpen(false);
+  }
+  
+  const stopPropagation = (e: React.MouseEvent) => e.stopPropagation();
+
+  return (
+    <>
+      <Dialog open={isDetailViewOpen} onOpenChange={setIsDetailViewOpen}>
+        <Card className="flex flex-col overflow-hidden transition-all hover:shadow-lg">
+          <DialogTrigger asChild>
+            <div className="cursor-pointer">
+              <CardHeader className="p-0">
+                <div className="relative aspect-square w-full">
+                  <Image
+                      src={imageUrl}
+                      alt={product.name}
+                      data-ai-hint={placeholder?.imageHint || "product"}
+                      fill
+                      className="object-contain p-2"
+                      onError={() => { if (!placeholder && extIdx < fallbackExts.length - 1) setExtIdx(extIdx + 1); }}
+                    />
+                  {isSoldOut && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                      <Badge variant="destructive" className="text-lg">ÉPUISÉ</Badge>
+                    </div>
+                  )}
+                  {isAdmin && (
+                    <div className="absolute top-2 right-2 flex flex-col gap-2">
+                       <Button
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsDetailViewOpen(false);
+                          setIsEditViewOpen(true);
+                        }}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                           <Button
+                            size="icon"
+                            variant="destructive"
+                            className="h-8 w-8"
+                             onClick={(e) => e.stopPropagation()}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent onClick={stopPropagation}>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Êtes-vous sûr(e) ?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Cette action est irréversible. Le produit "{product.name}" sera définitivement supprimé.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Annuler</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => onDeleteProduct(product.id)}>
+                              Supprimer
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  )}
+                   {isAdmin && (
+                    <div className="absolute bottom-2 right-2 flex flex-col gap-1">
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        className="h-7 w-7 bg-white/80 backdrop-blur-sm"
+                        disabled={isFirst}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onMove(product.id, 'up');
+                        }}
+                      >
+                        <ArrowUp className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        className="h-7 w-7 bg-white/80 backdrop-blur-sm"
+                        disabled={isLast}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onMove(product.id, 'down');
+                        }}
+                      >
+                        <ArrowDown className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="flex-1 p-4">
+                <CardTitle className="text-lg font-bold">{product.name}</CardTitle>
+                <p className="mt-2 text-2xl font-headline font-bold text-primary">${product.price.toFixed(2)}</p>
+              </CardContent>
+            </div>
+          </DialogTrigger>
+          <CardFooter className="p-4 pt-0">
+            <Button
+              className="w-full"
+              onClick={() => onAddToCart(product)}
+              disabled={isSoldOut}
+              aria-label={`Ajouter ${product.name} au panier`}
+            >
+              <PlusCircle className="mr-2 h-5 w-5" />
+              Ajouter au panier
+            </Button>
+          </CardFooter>
+        </Card>
+
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <div className="relative aspect-video w-full overflow-hidden rounded-lg">
+              <Image
+                  src={imageUrl}
+                  alt={product.name}
+                  data-ai-hint={placeholder?.imageHint || "product"}
+                  fill
+                  className="object-contain"
+                  onError={() => { if (!placeholder && extIdx < fallbackExts.length - 1) setExtIdx(extIdx + 1); }}
+                />
+            </div>
+            <DialogTitle className="text-2xl mt-4">{product.name}</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <p className="text-muted-foreground">{product.description}</p>
+            
+            {product.nutrition && (
+              <div>
+                <Separator className="my-4" />
+                <h3 className="text-lg font-semibold mb-2">Informations Nutritionnelles</h3>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                  <p>Calories:</p><p className="text-right font-medium">{product.nutrition.calories}</p>
+                  <p>Matières grasses:</p><p className="text-right font-medium">{product.nutrition.fat}</p>
+                  <p>Sucre:</p><p className="text-right font-medium">{product.nutrition.sugar}</p>
+                  <p>Protéines:</p><p className="text-right font-medium">{product.nutrition.protein}</p>
+                </div>
+              </div>
+            )}
+
+            <Separator className="my-4" />
+
+            <div className="flex items-baseline justify-between">
+              <p className="text-3xl font-bold text-primary">${product.price.toFixed(2)}</p>
+              {isSoldOut ? (
+                <Badge variant="destructive">Épuisé</Badge>
+              ) : (
+                <Badge>{product.quantity} en stock</Badge>
+              )}
+            </div>
+          </div>
+          <DialogFooter className="sm:justify-between flex-row">
+              <DialogClose asChild>
+                  <Button variant="outline">Fermer</Button>
+              </DialogClose>
+              <DialogClose asChild>
+                <Button
+                    onClick={() => onAddToCart(product)}
+                    disabled={isSoldOut}
+                    aria-label={`Ajouter ${product.name} au panier`}
+                >
+                    <PlusCircle className="mr-2 h-5 w-5" />
+                    Ajouter au panier
+                </Button>
+              </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isEditViewOpen} onOpenChange={setIsEditViewOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Modifier le Produit</DialogTitle>
+          </DialogHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+               <FormField
+                control={form.control}
+                name="imageId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Image du produit</FormLabel>
+                    <FormControl>
+                      <ImageSelector value={field.value} onChange={field.onChange} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nom du produit</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="price"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Prix</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.01" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="quantity"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Quantité</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="location"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Emplacement</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button type="button" variant="outline">Annuler</Button>
+                </DialogClose>
+                <Button type="submit">Sauvegarder</Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}

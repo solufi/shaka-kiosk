@@ -1,0 +1,148 @@
+'use client';
+
+import { useEffect, useState, useRef } from 'react';
+
+interface ScreensaverMedia {
+  id: string;
+  filename: string;
+  url: string;
+  mediaType?: 'image' | 'video';
+}
+
+interface ScreensaverConfig {
+  enabled: boolean;
+  durationSeconds: number;
+  images: ScreensaverMedia[];
+}
+
+const VIDEO_EXTS = ['mp4', 'webm', 'mov', 'ogg'];
+function isVideo(item: ScreensaverMedia): boolean {
+  if (item.mediaType === 'video') return true;
+  const ext = item.filename?.split('.').pop()?.toLowerCase() || '';
+  return VIDEO_EXTS.includes(ext);
+}
+
+interface ScreensaverProps {
+  onInteraction: () => void;
+}
+
+export function Screensaver({ onInteraction }: ScreensaverProps) {
+  const [config, setConfig] = useState<ScreensaverConfig | null>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    fetch('/api/local-screensaver')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data && data.images && data.images.length > 0) {
+          setConfig(data);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Slideshow timer for images only; videos advance on 'ended'
+  useEffect(() => {
+    if (!config || config.images.length <= 1) return;
+    const current = config.images[currentIndex];
+    if (isVideo(current)) return; // video advances via onEnded
+    const interval = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % config.images.length);
+    }, (config.durationSeconds || 5) * 1000);
+    return () => clearInterval(interval);
+  }, [config, currentIndex]);
+
+  // Fallback: no synced media → show original video
+  if (!config || config.images.length === 0) {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex cursor-pointer flex-col items-center justify-center bg-black"
+        onClick={onInteraction}
+      >
+        <video
+          src="/video.mp4"
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="absolute inset-0 h-full w-full object-cover"
+          onError={(e) => {
+            (e.target as HTMLVideoElement).style.display = 'none';
+          }}
+        />
+        <div className="absolute inset-0 bg-black/30" />
+        {/* Bottom overlay */}
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent py-10">
+          <div className="text-center">
+            <h1 className="text-4xl font-bold tracking-tight font-headline text-white drop-shadow-lg">
+              Touchez l&​apos;écran pour commencer
+            </h1>
+            <p className="mt-2 text-lg text-white/70 drop-shadow-md">
+              Découvrez notre sélection de produits
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const currentMedia = config.images[currentIndex];
+  const isCurrentVideo = isVideo(currentMedia);
+
+  const handleVideoEnded = () => {
+    if (config && config.images.length > 1) {
+      setCurrentIndex((prev) => (prev + 1) % config.images.length);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 cursor-pointer bg-black"
+      onClick={onInteraction}
+    >
+      {/* Render all media, show/hide with opacity for smooth transitions */}
+      {config.images.map((item, i) => {
+        const active = i === currentIndex;
+        if (isVideo(item)) {
+          return (
+            <video
+              key={item.id}
+              ref={active ? videoRef : undefined}
+              src={item.url}
+              autoPlay={active}
+              muted
+              playsInline
+              onEnded={handleVideoEnded}
+              className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-1000 ${
+                active ? 'opacity-100' : 'opacity-0'
+              }`}
+            />
+          );
+        }
+        return (
+          <img
+            key={item.id}
+            src={item.url}
+            alt=""
+            className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-1000 ${
+              active ? 'opacity-100' : 'opacity-0'
+            }`}
+          />
+        );
+      })}
+
+      {/* Bottom overlay — always visible */}
+      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent py-10 pointer-events-none">
+        <div className="text-center">
+          <h1 className="text-4xl font-bold tracking-tight font-headline text-white drop-shadow-lg animate-pulse">
+            Touchez l&​apos;écran pour commencer
+          </h1>
+          <p className="mt-2 text-lg text-white/70 drop-shadow-md">
+            Découvrez notre sélection de produits
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}

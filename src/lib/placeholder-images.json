@@ -1,0 +1,112 @@
+{
+  "placeholderImages": [
+    {
+      "id": "core-chocolate",
+      "description": "Fairlife Core Chocolate",
+      "imageUrl": "/images/products/Core_chocolate.webp",
+      "imageHint": "protein shake"
+    },
+    {
+      "id": "grenade-cookie",
+      "description": "Grenade Cookie and Cream",
+      "imageUrl": "/images/products/Grenade_cookie_cream.webp",
+      "imageHint": "protein bar"
+    },
+    {
+      "id": "grenade-salted-caramel",
+      "description": "Grenade Salted Caramel",
+      "imageUrl": "/images/products/Grenade_salted_caramel.webp",
+      "imageHint": "protein bar"
+    },
+    {
+      "id": "probites-birthday-cake",
+      "description": "Probite Birthday cake",
+      "imageUrl": "/images/products/probites-birthday-cake.webp",
+      "imageHint": "protein powder"
+    },
+    {
+      "id": "probites-cookie-dough",
+      "description": "Probites Cookie dough",
+      "imageUrl": "/images/products/probites-cookie-dough.webp",
+      "imageHint": "protein snack"
+    },
+    {
+      "id": "probites-cookies-and-cream",
+      "description": "Probites cookie and cream",
+      "imageUrl": "/images/products/probites-cookies-and-cream.webp",
+      "imageHint": "protein snack"
+    },
+    {
+      "id": "probites-peanut-butter",
+      "description": "Probites-peanut-butter",
+      "imageUrl": "/images/products/probites-peanut-butter-crunch-01.webp",
+      "imageHint": "protein snack"
+    },
+    {
+      "id": "probites-smores",
+      "description": "Probites Smore",
+      "imageUrl": "/images/products/probites-smores.png",
+      "imageHint": "protein snack"
+    },
+    {
+      "id": "probites-strawberry",
+      "description": "Probites Strawberry cheesecake",
+      "imageUrl": "/images/products/probites-strawberry-cheesecake.webp",
+      "imageHint": "protein snack"
+    },
+    {
+      "id": "sampleendurance-mangue",
+      "description": "sampleendurance-mangue",
+      "imageUrl": "/images/products/sampleendurance-mangue.webp",
+      "imageHint": "product"
+    },
+    {
+      "id": "sampleendurance-mangue---copie",
+      "description": "sampleendurance-mangue---copie",
+      "imageUrl": "/images/products/sampleendurance-mangue---copie.png",
+      "imageHint": "product"
+    },
+    {
+      "id": "sampleendurance-lime-290e24a6-c5ac-4c77-8d8d-c9eeed21711a---copie",
+      "description": "sampleendurance-lime-290e24a6-c5ac-4c77-8d8d-c9eeed21711a---copie",
+      "imageUrl": "/images/products/sampleendurance-lime-290e24a6-c5ac-4c77-8d8d-c9eeed21711a---copie.png",
+      "imageHint": "product"
+    },
+    {
+      "id": "sampleendurance-lime-290e24a6-c5ac-4c77-8d8d-c9eeed21711a",
+      "description": "sampleendurance-lime-290e24a6-c5ac-4c77-8d8d-c9eeed21711a",
+      "imageUrl": "/images/products/sampleendurance-lime-290e24a6-c5ac-4c77-8d8d-c9eeed21711a.webp",
+      "imageHint": "product"
+    },
+    {
+      "id": "fea204477f18403785a7",
+      "description": "fea204477f18403785a7",
+      "imageUrl": "/images/products/fea204477f18403785a7.png",
+      "imageHint": "product"
+    },
+    {
+      "id": "a69037ed3b5c4acf8c37",
+      "description": "a69037ed3b5c4acf8c37",
+      "imageUrl": "/images/products/a69037ed3b5c4acf8c37.png",
+      "imageHint": "product"
+    },
+    {
+      "id": "d21f915156e24e7cb7db",
+      "description": "d21f915156e24e7cb7db",
+      "imageUrl": "/images/products/d21f915156e24e7cb7db.jpg",
+      "imageHint": "product"
+    },
+    {
+      "id": "grenadebar",
+      "description": "grenadebar",
+      "imageUrl": "/images/products/grenadebar.jpg",
+      "imageHint": "product"
+    },
+    {
+      "id": "grenadeoreobox",
+      "description": "grenadeoreobox",
+      "imageUrl": "/images/products/grenadeoreobox.jpg",
+      "imageHint": "product"
+    }
+  ]
+}
