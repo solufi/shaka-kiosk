@@ -21,16 +21,14 @@ import {
 } from 'lucide-react';
 import { PromoInput, type AppliedPromo } from './promo-input';
 import { ReceiptPrompt } from './receipt-prompt';
+import { enqueueRedemption, flushRedemptions } from '@/lib/corporate-queue';
 
 const MACHINE_ID =
   (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_MACHINE_ID) ||
   'default';
 
-const FLEET_URL =
-  (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_FLEET_URL) ||
-  'https://fleet.shakadistribution.ca';
-
 const PAYMENT_TIMEOUT_SECONDS = 120;
+const REDEMPTION_FLUSH_INTERVAL_MS = 60000;
 const PAYMENT_POLL_INTERVAL_MS = 1000;
 const DOOR_POLL_INTERVAL_MS = 1000;
 const SUCCESS_DISPLAY_MS = 8000;
@@ -118,6 +116,16 @@ export function CartPanel({
         if (Array.isArray(data)) setPlaceholderImages(data);
       })
       .catch(() => {});
+  }, []);
+
+  // Retry any corporate redemptions that couldn't reach the Fleet Manager
+  // (e.g. a network blip at vend time) — on mount and on an interval.
+  useEffect(() => {
+    void flushRedemptions();
+    const interval = setInterval(() => {
+      void flushRedemptions();
+    }, REDEMPTION_FLUSH_INTERVAL_MS);
+    return () => clearInterval(interval);
   }, []);
 
   const hasRelayItem = (items: CartItem[]) =>
@@ -228,27 +236,22 @@ export function CartPanel({
       // its subsidized share. One CorporateUsage row per dispensed unit.
       // The customer has already paid the employee share via the discounted
       // Stripe total (or nothing, for a 100% free vend).
+      //
+      // Each redemption is queued with a stable idempotency key first, then
+      // flushed — so a network blip can't lose (or duplicate) the billing.
       if (appliedPromo?.kind === 'corporate') {
         for (const item of cartSnapshotRef.current) {
           for (let q = 0; q < item.orderQuantity; q++) {
-            try {
-              await fetch(`${FLEET_URL}/api/promo-codes/validate`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  code: appliedPromo.code,
-                  machineId: MACHINE_ID,
-                  redeem: true,
-                  productName: item.name,
-                  productPrice: item.price,
-                  machineName: MACHINE_ID,
-                }),
-              });
-            } catch (err) {
-              console.error('Corporate redemption record failed:', err);
-            }
+            enqueueRedemption({
+              code: appliedPromo.code,
+              machineId: MACHINE_ID,
+              machineName: MACHINE_ID,
+              productName: item.name,
+              productPrice: item.price,
+            });
           }
         }
+        void flushRedemptions();
       }
       onPurchase();
       if (isFridge) {
