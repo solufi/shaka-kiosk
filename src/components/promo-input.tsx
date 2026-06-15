@@ -12,6 +12,14 @@ export interface AppliedPromo {
   discountType: 'percent' | 'fixed';
   discountValue: number; // percent (0-100) or cents
   promoId: string;
+  // Code family. 'corporate' codes are subsidized by an employer: the
+  // discount equals the employer's share and a CorporateUsage row must be
+  // recorded at vend time so the company is invoiced.
+  kind: 'promo' | 'corporate';
+  // Corporate-only metadata
+  subsidyPercent?: number;
+  companyName?: string;
+  employeeName?: string;
 }
 
 interface PromoInputProps {
@@ -49,12 +57,32 @@ export function PromoInput({
       });
       const data = await res.json();
       if (data.ok && data.valid) {
-        onApply({
-          code: data.code,
-          discountType: data.discountType,
-          discountValue: data.discountValue,
-          promoId: data.promoId,
-        });
+        if (data.kind === 'corporate') {
+          // Corporate code: the discount is the employer's subsidy share.
+          // The validate-only response has no `code` field, so reuse the
+          // entered code (needed later to record the redemption).
+          const pct = Number(data.subsidyPercent ?? data.discountValue ?? 0);
+          onApply({
+            code: clean,
+            discountType: 'percent',
+            discountValue: pct,
+            promoId: '',
+            kind: 'corporate',
+            subsidyPercent: pct,
+            companyName: data.companyName,
+            employeeName: data.employeeName,
+          });
+        } else {
+          // Standard promo. The server uses "percentage" | "fixed"; normalize
+          // to the local 'percent' | 'fixed' shape.
+          onApply({
+            code: data.code,
+            discountType: data.discountType === 'percentage' ? 'percent' : 'fixed',
+            discountValue: data.discountValue,
+            promoId: data.promoId,
+            kind: 'promo',
+          });
+        }
         setOpen(false);
         setCode('');
       } else {
@@ -77,7 +105,14 @@ export function PromoInput({
         <div className="flex items-center gap-2 text-sm">
           <Check className="h-4 w-4 text-green-500" />
           <span className="font-mono font-semibold">{applied.code}</span>
-          <span className="text-green-600 font-bold">{label}</span>
+          {applied.kind === 'corporate' && applied.companyName && (
+            <span className="text-muted-foreground">· {applied.companyName}</span>
+          )}
+          <span className="text-green-600 font-bold">
+            {applied.kind === 'corporate' && applied.discountValue >= 100
+              ? 'Gratuit'
+              : label}
+          </span>
         </div>
         <button
           type="button"

@@ -26,6 +26,10 @@ const MACHINE_ID =
   (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_MACHINE_ID) ||
   'default';
 
+const FLEET_URL =
+  (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_FLEET_URL) ||
+  'https://fleet.shakadistribution.ca';
+
 const PAYMENT_TIMEOUT_SECONDS = 120;
 const PAYMENT_POLL_INTERVAL_MS = 1000;
 const DOOR_POLL_INTERVAL_MS = 1000;
@@ -102,6 +106,9 @@ export function CartPanel({
   const [receiptDismissed, setReceiptDismissed] = useState(false);
   const handledRef = useRef(false);
   const cartSnapshotRef = useRef<CartItem[]>([]);
+  // True when the current vend is fully employer-subsidized (total = 0): no
+  // Stripe Terminal payment is taken, we dispense directly.
+  const freeVendRef = useRef(false);
 
   // Load placeholder images dynamically
   useEffect(() => {
@@ -126,6 +133,7 @@ export function CartPanel({
     setAppliedPromo(null);
     handledRef.current = false;
     cartSnapshotRef.current = [];
+    freeVendRef.current = false;
   }, []);
 
   const handlePaymentFailed = useCallback(() => {
@@ -202,17 +210,46 @@ export function CartPanel({
       if (!allDropsOk) break;
     }
 
-    try {
-      await fetch(`${base}/stripe/vend-result`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ success: allDropsOk }),
-      });
-    } catch (err) {
-      console.error('Vend result report failed:', err);
+    // A free vend has no Stripe Terminal session to capture/cancel.
+    if (!freeVendRef.current) {
+      try {
+        await fetch(`${base}/stripe/vend-result`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ success: allDropsOk }),
+        });
+      } catch (err) {
+        console.error('Vend result report failed:', err);
+      }
     }
 
     if (allDropsOk) {
+      // Record the corporate redemption(s) so the employer is invoiced for
+      // its subsidized share. One CorporateUsage row per dispensed unit.
+      // The customer has already paid the employee share via the discounted
+      // Stripe total (or nothing, for a 100% free vend).
+      if (appliedPromo?.kind === 'corporate') {
+        for (const item of cartSnapshotRef.current) {
+          for (let q = 0; q < item.orderQuantity; q++) {
+            try {
+              await fetch(`${FLEET_URL}/api/promo-codes/validate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  code: appliedPromo.code,
+                  machineId: MACHINE_ID,
+                  redeem: true,
+                  productName: item.name,
+                  productPrice: item.price,
+                  machineName: MACHINE_ID,
+                }),
+              });
+            } catch (err) {
+              console.error('Corporate redemption record failed:', err);
+            }
+          }
+        }
+      }
       onPurchase();
       if (isFridge) {
         setPaymentState('success_fridge');
@@ -223,7 +260,7 @@ export function CartPanel({
       setPaymentError(vendError || 'Le produit n\'a pas été distribué. Aucun frais appliqué.');
       setPaymentState('vend_failed');
     }
-  }, [onPurchase, cartItems]);
+  }, [onPurchase, cartItems, appliedPromo]);
 
   const cancelPayment = useCallback(async () => {
     try {
@@ -241,6 +278,15 @@ export function CartPanel({
     setPaymentError(null);
     setCountdown(PAYMENT_TIMEOUT_SECONDS);
     handledRef.current = false;
+
+    // Fully subsidized vend (total = 0, e.g. 100% corporate code): no card
+    // payment is possible/needed. Go straight to dispensing.
+    if (total <= 0) {
+      freeVendRef.current = true;
+      setPaymentState('approved');
+      return;
+    }
+    freeVendRef.current = false;
 
     try {
       const items = cartItems.map((item) => ({
