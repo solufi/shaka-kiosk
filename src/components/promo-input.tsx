@@ -171,7 +171,7 @@ export function PromoInput({
           {error && (
             <p className="text-center text-red-400 font-medium">{error}</p>
           )}
-          <VirtualKeyboard value={code} onChange={(v) => setCode(v.toUpperCase())} />
+          <VirtualKeyboard value={code} onChange={(v) => setCode(v.toUpperCase())} uppercase />
           <button
             type="button"
             onClick={validate}

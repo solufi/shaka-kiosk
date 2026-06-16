@@ -8,6 +8,8 @@ interface VirtualKeyboardProps {
   onChange: (value: string) => void;
   /** Show only email-relevant keys (letters, digits, @ . _ -) */
   emailMode?: boolean;
+  /** Force every letter to uppercase (e.g. promo codes); hides the shift key */
+  uppercase?: boolean;
 }
 
 const ROW1 = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
@@ -20,11 +22,13 @@ export function VirtualKeyboard({
   value,
   onChange,
   emailMode = false,
+  uppercase = false,
 }: VirtualKeyboardProps) {
   const [shift, setShift] = useState(false);
+  const upper = uppercase || shift;
 
   const press = (key: string) => {
-    const ch = shift ? key.toUpperCase() : key;
+    const ch = upper ? key.toUpperCase() : key;
     onChange(value + ch);
     if (shift) setShift(false);
   };
@@ -44,7 +48,7 @@ export function VirtualKeyboard({
       onClick={() => press(k)}
       className={keyClass}
     >
-      {shift ? k.toUpperCase() : k}
+      {upper ? k.toUpperCase() : k}
     </button>
   );
 
@@ -54,13 +58,15 @@ export function VirtualKeyboard({
       <div className="flex gap-2">{ROW2.map(renderKey)}</div>
       <div className="flex gap-2 px-6">{ROW3.map(renderKey)}</div>
       <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={toggleShift}
-          className={`${wideKeyClass} ${shift ? 'bg-orange-500 hover:bg-orange-400' : ''}`}
-        >
-          <ArrowUp className="h-5 w-5" />
-        </button>
+        {!uppercase && (
+          <button
+            type="button"
+            onClick={toggleShift}
+            className={`${wideKeyClass} ${shift ? 'bg-orange-500 hover:bg-orange-400' : ''}`}
+          >
+            <ArrowUp className="h-5 w-5" />
+          </button>
+        )}
         {ROW4.map(renderKey)}
         <button
           type="button"
