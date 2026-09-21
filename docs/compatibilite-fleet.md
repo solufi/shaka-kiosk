@@ -8,4 +8,4 @@ Les usages corporatifs et les promotions sont enregistrés avec des identifiants
 
 Déployer les trois composants ensemble, hors transaction, après sauvegarde. Le guide `docs/fiabilite-et-recette.md` de Shakafleet décrit les secrets, le pilote, la reprise et les limites de ce lot. Les anciennes interfaces d’administration Firebase et les modules AI restent présents ; leur rationalisation et certains avis de dépendances nécessitent une passe distincte.
 
-Validation : `npm run check` puis `npm run build`. Ces contrôles ne remplacent pas les essais du vrai terminal Stripe, du relais, du capteur de porte et des caméras.
+Validation depuis une copie vierge : `npm ci`, `npm ci --prefix functions`, `npm run build --prefix functions`, `npm run check`, puis `npm run build`. Le sous-projet Firebase possède son propre fichier de dépendances verrouillées ; ses dépendances doivent être installées avant la vérification TypeScript du dépôt. GitHub Actions exécute cette même séquence. Ces contrôles ne remplacent pas les essais du vrai terminal Stripe, du relais, du capteur de porte et des caméras.
