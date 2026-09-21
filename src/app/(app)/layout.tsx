@@ -1,6 +1,7 @@
 'use client';
 import type { ReactNode } from 'react';
 import { useState, useEffect } from 'react';
+import { flushRedemptions } from '@/lib/corporate-queue';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutGrid, BarChart2, PanelLeft, LogOut } from 'lucide-react';
@@ -28,6 +29,11 @@ const navItems = [
 ];
 
 export default function AppLayout({ children }: { children: ReactNode }) {
+  useEffect(() => {
+    void flushRedemptions();
+    const timer = setInterval(() => void flushRedemptions(), 60000);
+    return () => clearInterval(timer);
+  }, []);
   const pathname = usePathname();
   const { toast } = useToast();
   const [isLocalAdmin, setIsLocalAdmin] = useState(false);

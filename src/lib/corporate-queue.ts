@@ -13,7 +13,7 @@
  */
 
 const QUEUE_KEY = 'shaka_corp_redemptions_v1';
-const MAX_ATTEMPTS = 12;
+
 
 const FLEET_URL =
   (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_FLEET_URL) ||
@@ -24,10 +24,12 @@ export interface QueuedRedemption {
   code: string;
   machineId: string;
   machineName?: string;
+  productId?: string;
   productName: string;
   productPrice: number;
   enqueuedAt: number;
   attempts: number;
+  rejected?: string;
 }
 
 function genKey(): string {
@@ -58,7 +60,7 @@ function write(list: QueuedRedemption[]): void {
   try {
     window.localStorage.setItem(QUEUE_KEY, JSON.stringify(list));
   } catch {
-    // localStorage full / unavailable — nothing else we can do
+    throw new Error("Impossible d’enregistrer la participation employeur; vérification requise");
   }
 }
 
@@ -69,20 +71,24 @@ export function enqueueRedemption(input: {
   code: string;
   machineId: string;
   machineName?: string;
+  productId?: string;
   productName: string;
   productPrice: number;
+  idempotencyKey?: string;
 }): string {
   const entry: QueuedRedemption = {
-    idempotencyKey: genKey(),
+    idempotencyKey: input.idempotencyKey || genKey(),
     code: input.code,
     machineId: input.machineId,
     machineName: input.machineName,
+    productId: input.productId,
     productName: input.productName,
     productPrice: input.productPrice,
     enqueuedAt: Date.now(),
     attempts: 0,
   };
-  write([...read(), entry]);
+  const existing = read();
+  if (!existing.some(item => item.idempotencyKey === entry.idempotencyKey)) write([...existing, entry]);
   return entry.idempotencyKey;
 }
 
@@ -91,11 +97,11 @@ let flushing = false;
 /**
  * Attempt to POST every queued redemption. Successful or definitively-rejected
  * entries are dropped; transient (network / 5xx) failures are kept and retried
- * later, up to MAX_ATTEMPTS.
+ * later without discarding unrecorded purchases.
  */
 export async function flushRedemptions(): Promise<void> {
   if (flushing) return;
-  const list = read();
+  const list = read().filter(item => !item.rejected);
   if (list.length === 0) return;
 
   flushing = true;
@@ -104,7 +110,7 @@ export async function flushRedemptions(): Promise<void> {
   try {
     for (const item of list) {
       try {
-        const res = await fetch(`${FLEET_URL}/api/promo-codes/validate`, {
+        const res = await fetch('http://127.0.0.1:5001/corporate/validate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -112,34 +118,29 @@ export async function flushRedemptions(): Promise<void> {
             machineId: item.machineId,
             machineName: item.machineName,
             redeem: true,
+            productId: item.productId,
             productName: item.productName,
             productPrice: item.productPrice,
             idempotencyKey: item.idempotencyKey,
           }),
         });
 
-        if (res.ok) {
-          // The server made a definitive decision (recorded, deduplicated, or
-          // rejected for a permanent reason like an invalid code / reached
-          // limit). Either way, stop retrying this entry.
-          await res.json().catch(() => undefined);
-          continue;
-        }
-
-        // Non-2xx → likely transient (5xx, proxy). Retry later.
-        const attempts = item.attempts + 1;
-        if (attempts < MAX_ATTEMPTS) {
-          remaining.push({ ...item, attempts });
+        const response = await res.json().catch(() => null);
+        if (res.ok && response?.ok && response?.valid) continue;
+        if (res.ok && response?.valid === false) {
+          remaining.push({ ...item, rejected: response.error || 'Reprise manuelle requise' });
+        } else {
+          remaining.push({ ...item, attempts: item.attempts + 1 });
         }
       } catch {
         // Network failure → keep for retry.
         const attempts = item.attempts + 1;
-        if (attempts < MAX_ATTEMPTS) {
-          remaining.push({ ...item, attempts });
-        }
+        remaining.push({ ...item, attempts });
       }
     }
-    write(remaining);
+    // Preserve entries added while fetch was in flight (and retained rejections).
+    const processed = new Set(list.map(item => item.idempotencyKey));
+    write([...read().filter(item => !processed.has(item.idempotencyKey)), ...remaining]);
   } finally {
     flushing = false;
   }
