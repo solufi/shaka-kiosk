@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import path from 'path';
+import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 
 export const runtime = 'nodejs';
@@ -20,7 +21,13 @@ async function readCache(): Promise<unknown[] | null> {
 
 async function writeCache(data: unknown): Promise<void> {
   await fs.mkdir(CACHE_DIR, { recursive: true });
-  await fs.writeFile(CACHE_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  const temporary = `${CACHE_FILE}.${randomUUID()}.tmp`;
+  const file = await fs.open(temporary, 'wx', 0o644);
+  try {
+    await file.writeFile(JSON.stringify(data, null, 2), 'utf-8');
+    await file.sync();
+  } finally { await file.close(); }
+  try { await fs.rename(temporary, CACHE_FILE); } finally { await fs.rm(temporary, { force: true }); }
 }
 
 export async function GET() {

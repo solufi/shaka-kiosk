@@ -87,9 +87,11 @@ export function CartPanel({
 
   // Compute discount in dollars (subtotal is in dollars)
   const discount = appliedPromo
-    ? appliedPromo.discountType === 'percent'
+    ? appliedPromo.kind === 'corporate'
+      ? cartItems.reduce((sum, item) => sum + Math.round(item.price * appliedPromo.discountValue) * item.orderQuantity, 0) / 100
+      : appliedPromo.discountType === 'percent'
       ? Math.min(subtotal, (subtotal * appliedPromo.discountValue) / 100)
-      : Math.min(subtotal, appliedPromo.discountValue / 100) // discountValue is in cents
+      : Math.min(subtotal, appliedPromo.discountValue) // Fleet stores fixed discounts in dollars
     : 0;
 
   const total = Math.max(0, subtotal - discount);
@@ -103,6 +105,7 @@ export function CartPanel({
   const [placeholderImages, setPlaceholderImages] = useState<PlaceholderImage[]>([]);
   const [receiptDismissed, setReceiptDismissed] = useState(false);
   const handledRef = useRef(false);
+  const purchaseIdRef = useRef('');
   const cartSnapshotRef = useRef<CartItem[]>([]);
   // True when the current vend is fully employer-subsidized (total = 0): no
   // Stripe Terminal payment is taken, we dispense directly.
@@ -165,20 +168,25 @@ export function CartPanel({
     let allDropsOk = true;
     let vendError = '';
 
-    for (const item of cartItems) {
+    const delivered: typeof cartItems = [];
+    for (const item of cartItems.filter(item => !item.useRelay)) {
+      let deliveredQuantity = 0;
       for (let q = 0; q < item.orderQuantity; q++) {
         setDispensingItem(item.name);
 
         try {
           const vendPayload: Record<string, any> = {
-            machineId: 'default',
+            machineId: MACHINE_ID,
+            productId: item.id,
+            commandId: `${purchaseIdRef.current}:${item.id}:${q}`,
+            sessionId: freeVendRef.current ? undefined : purchaseIdRef.current,
             useRelay: item.useRelay || false,
           };
 
           if (item.useRelay) {
             vendPayload.useRelay = true;
           } else if (item.location) {
-            vendPayload.seq = item.location;
+            vendPayload.location = item.location;
           } else {
             allDropsOk = false;
             vendError = `Aucun emplacement configuré pour ${item.name}`;
@@ -202,12 +210,13 @@ export function CartPanel({
             if (!result.ok || result.dropDetected !== true) {
               allDropsOk = false;
               if (result.dropDetected === false) {
-                vendError = `Produit non détecté: ${item.name}. Aucun frais appliqué.`;
+                vendError = `Produit non détecté: ${item.name}. Le paiement sera vérifié.`;
               } else {
                 vendError = `Erreur distributeur: ${item.name}`;
               }
             }
           }
+          if (result.ok && result.dropDetected === true) deliveredQuantity++;
         } catch (err) {
           allDropsOk = false;
           vendError = `Erreur de communication: ${item.name}`;
@@ -215,62 +224,92 @@ export function CartPanel({
 
         if (!allDropsOk) break;
       }
+      if (deliveredQuantity) delivered.push({ ...item, orderQuantity: deliveredQuantity });
       if (!allDropsOk) break;
+    }
+
+    const fridgeItems = cartItems.filter(item => item.useRelay);
+    if (allDropsOk && fridgeItems.length) {
+      setDispensingItem('Ouvrez le frigo, prenez les articles sélectionnés puis refermez la porte.');
+      try {
+        const response = await fetch(`${base}/fridge/access`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: purchaseIdRef.current, paid: !freeVendRef.current,
+            items: fridgeItems.map(item => ({ productId: item.id, qty: item.orderQuantity })) }),
+        });
+        const started = await response.json();
+        if (!response.ok || !started.ok) throw new Error(started.error || 'Ouverture indisponible');
+        const deadline = Date.now() + 240000;
+        let complete = false;
+        while (Date.now() < deadline) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          const res = await fetch(`${base}/fridge/status`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: purchaseIdRef.current }) });
+          const status = await res.json();
+          if (status.pending) continue;
+          if (!res.ok || !status.ok || !status.accessCompleted) throw new Error(status.error || 'Fermeture à vérifier');
+          complete = true; break;
+        }
+        if (!complete) throw new Error('Fermeture non confirmée');
+        delivered.push(...fridgeItems);
+        setDoorClosed(true);
+      } catch (err) {
+        allDropsOk = false;
+        vendError = 'Accès au frigo à vérifier. Veuillez contacter le service client.';
+      }
+    }
+
+    // Persist the employer share even when a later delivery or card settlement fails.
+    if (appliedPromo?.kind === 'corporate') {
+      for (const item of delivered) for (let q = 0; q < item.orderQuantity; q++) {
+        enqueueRedemption({ code: appliedPromo.code, machineId: MACHINE_ID, machineName: MACHINE_ID,
+          productId: item.id, productName: item.name, productPrice: item.price,
+          idempotencyKey: `${purchaseIdRef.current}:${item.id}:${q}` });
+      }
+      void flushRedemptions();
+    }
+
+    if (appliedPromo?.kind === 'promo' && delivered.length > 0) {
+      enqueueRedemption({ code: appliedPromo.code, machineId: MACHINE_ID, machineName: MACHINE_ID,
+        productName: 'Panier', productPrice: subtotal, idempotencyKey: `${purchaseIdRef.current}:promo` });
+      void flushRedemptions();
     }
 
     // A free vend has no Stripe Terminal session to capture/cancel.
     if (!freeVendRef.current) {
       try {
-        await fetch(`${base}/stripe/vend-result`, {
+        const settlement = await fetch(`${base}/stripe/vend-result`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ success: allDropsOk }),
+          body: JSON.stringify({ success: allDropsOk, sessionId: purchaseIdRef.current }),
         });
+        const outcome = await settlement.json();
+        if (!settlement.ok || !outcome.ok) throw new Error(outcome.error || 'Paiement à vérifier');
       } catch (err) {
-        console.error('Vend result report failed:', err);
+        setPaymentError('Votre paiement doit être vérifié. Veuillez contacter le service client.');
+        setPaymentState('vend_failed');
+        return;
       }
     }
 
     if (allDropsOk) {
-      // Record the corporate redemption(s) so the employer is invoiced for
-      // its subsidized share. One CorporateUsage row per dispensed unit.
-      // The customer has already paid the employee share via the discounted
-      // Stripe total (or nothing, for a 100% free vend).
-      //
-      // Each redemption is queued with a stable idempotency key first, then
-      // flushed — so a network blip can't lose (or duplicate) the billing.
-      if (appliedPromo?.kind === 'corporate') {
-        for (const item of cartSnapshotRef.current) {
-          for (let q = 0; q < item.orderQuantity; q++) {
-            enqueueRedemption({
-              code: appliedPromo.code,
-              machineId: MACHINE_ID,
-              machineName: MACHINE_ID,
-              productName: item.name,
-              productPrice: item.price,
-            });
-          }
-        }
-        void flushRedemptions();
-      }
       onPurchase();
-      if (isFridge) {
-        setPaymentState('success_fridge');
-      } else {
-        setPaymentState('success_normal');
-      }
+      setPaymentState('success_normal');
     } else {
-      setPaymentError(vendError || 'Le produit n\'a pas été distribué. Aucun frais appliqué.');
+      setPaymentError(vendError || 'Le produit n\'a pas été distribué. Le paiement sera vérifié.');
       setPaymentState('vend_failed');
     }
-  }, [onPurchase, cartItems, appliedPromo]);
+  }, [onPurchase, cartItems, appliedPromo, subtotal]);
 
   const cancelPayment = useCallback(async () => {
     try {
       const base = getVendApiBase();
-      await fetch(`${base}/stripe/cancel`, { method: 'POST' });
+      const response = await fetch(`${base}/stripe/cancel`, { method: 'POST' });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error || 'Annulation non confirmée');
     } catch (e) {
-      console.error('Cancel failed:', e);
+      setPaymentError('Annulation non confirmée. Veuillez contacter le service client.');
+      setPaymentState('vend_failed');
+      return;
     }
     setPaymentError('Paiement annulé');
     setPaymentState('denied');
@@ -281,6 +320,22 @@ export function CartPanel({
     setPaymentError(null);
     setCountdown(PAYMENT_TIMEOUT_SECONDS);
     handledRef.current = false;
+    purchaseIdRef.current = crypto.randomUUID();
+
+    if (appliedPromo) {
+      try {
+        const response = await fetch(`${getVendApiBase()}/corporate/validate`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: appliedPromo.code, redeem: false, quantity: cartItems.reduce((sum, item) => sum + item.orderQuantity, 0) }),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.valid || result.discountValue !== appliedPromo.discountValue) throw new Error(result.error || 'Le code a changé; veuillez le saisir à nouveau.');
+      } catch (err) {
+        setPaymentError(err instanceof Error ? err.message : 'Code indisponible');
+        setPaymentState('denied');
+        return;
+      }
+    }
 
     // Fully subsidized vend (total = 0, e.g. 100% corporate code): no card
     // payment is possible/needed. Go straight to dispensing.
@@ -293,9 +348,13 @@ export function CartPanel({
 
     try {
       const items = cartItems.map((item) => ({
+        productId: item.id,
+        code: /^\d+$/.test(item.location) ? Number(item.location) : 0,
+        location: item.location, useRelay: !!item.useRelay,
         name: item.name,
         price: Math.round(item.price * 100),
-        quantity: item.orderQuantity,
+        qty: item.orderQuantity,
+        quantity: item.orderQuantity, // older agents/kiosks accept either spelling
       }));
 
       const base = getVendApiBase();
@@ -320,6 +379,7 @@ export function CartPanel({
         return;
       }
 
+      purchaseIdRef.current = data.session?.session_id || purchaseIdRef.current;
       setPaymentState('waiting');
     } catch (error) {
       console.error('Start payment failed:', error);
@@ -527,7 +587,7 @@ export function CartPanel({
           </div>
           <div className="mt-12 flex flex-col items-center gap-4 text-white">
             <p className="text-2xl font-semibold">
-              Récupérez votre achat au bas de la machine
+              {hasRelayItem(cartSnapshotRef.current) ? 'Merci d’avoir refermé le frigo.' : 'Récupérez votre achat au bas de la machine'}
             </p>
             <ArrowDown className="h-32 w-32 text-green-400 animate-bounce" />
           </div>
@@ -591,7 +651,7 @@ export function CartPanel({
             )}
             <div className="mt-4 rounded-2xl bg-green-900/40 px-8 py-4 border border-green-600">
               <p className="text-xl font-semibold text-green-400 text-center">
-                Votre carte n&​apos;a pas été chargée
+                Le statut de votre paiement sera vérifié
               </p>
             </div>
             <p className="text-lg text-white/60 mt-2">
@@ -665,7 +725,7 @@ export function CartPanel({
                               item.orderQuantity - 1
                             )
                           }
-                          disabled={item.orderQuantity <= 1}
+                          disabled={paymentState !== 'idle' || item.orderQuantity <= 1}
                         >
                           <MinusCircle className="h-4 w-4" />
                         </Button>
@@ -682,7 +742,7 @@ export function CartPanel({
                               item.orderQuantity + 1
                             )
                           }
-                          disabled={item.orderQuantity >= item.quantity}
+                          disabled={paymentState !== 'idle' || item.orderQuantity >= item.quantity}
                         >
                           <PlusCircle className="h-4 w-4" />
                         </Button>
@@ -691,7 +751,7 @@ export function CartPanel({
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => onRemoveItem(item.id)}
+                      disabled={paymentState !== 'idle'} onClick={() => onRemoveItem(item.id)}
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
@@ -736,7 +796,7 @@ export function CartPanel({
               >
                 Passer au paiement
               </Button>
-              <Button variant="outline" onClick={onClearCart}>
+              <Button variant="outline" onClick={onClearCart} disabled={paymentState !== 'idle'}>
                 Vider le panier
               </Button>
             </CardFooter>

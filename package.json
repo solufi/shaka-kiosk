@@ -8,9 +8,11 @@
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
     "build": "NODE_ENV=production next build",
     "start": "next start",
-    "lint": "next lint",
-    "typecheck": "tsc --noEmit",
-    "db:seed": "tsx scripts/seed-firestore.ts"
+    "lint": "tsc --noEmit --incremental false",
+    "typecheck": "tsc --noEmit --incremental false",
+    "db:seed": "tsx scripts/seed-firestore.ts",
+    "test": "node --test tests/*.test.cjs",
+    "check": "npm run typecheck && npm test"
   },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.20.0",
@@ -45,7 +47,7 @@
     "firebase": "^11.9.1",
     "genkit": "^1.20.0",
     "lucide-react": "^0.475.0",
-    "next": "15.3.3",
+    "next": "^15.5.24",
     "patch-package": "^8.0.0",
     "react": "^18.3.1",
     "react-beautiful-dnd": "^13.1.1",
@@ -63,9 +65,12 @@
     "@types/react-beautiful-dnd": "^13.1.8",
     "@types/react-dom": "^18",
     "genkit-cli": "^1.20.0",
-    "postcss": "^8",
+    "postcss": "^8.5.23",
     "tailwindcss": "^3.4.1",
     "tsx": "^4.16.2",
     "typescript": "^5"
+  },
+  "overrides": {
+    "postcss": "$postcss"
   }
 }

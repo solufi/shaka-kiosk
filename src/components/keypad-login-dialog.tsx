@@ -42,7 +42,7 @@ export function KeypadLoginDialog() {
       } catch {
         // ignore
       }
-      initiateAnonymousSignIn(auth);
+      if (auth) initiateAnonymousSignIn(auth);
       toast({
         title: 'Connexion réussie',
         description: 'Bienvenue, Administrateur.',

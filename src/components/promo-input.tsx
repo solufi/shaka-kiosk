@@ -10,7 +10,7 @@ const FLEET_URL =
 export interface AppliedPromo {
   code: string;
   discountType: 'percent' | 'fixed';
-  discountValue: number; // percent (0-100) or cents
+  discountValue: number; // percent (0-100) or dollars
   promoId: string;
   // Code family. 'corporate' codes are subsidized by an employer: the
   // discount equals the employer's share and a CorporateUsage row must be
@@ -50,7 +50,7 @@ export function PromoInput({
     setValidating(true);
     setError(null);
     try {
-      const res = await fetch(`${FLEET_URL}/api/promo-codes/validate`, {
+      const res = await fetch('http://127.0.0.1:5001/corporate/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: clean, machineId, redeem: false }),
