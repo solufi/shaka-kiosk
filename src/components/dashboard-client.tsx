@@ -1,11 +1,9 @@
 'use client';
 import { useState, useEffect } from 'react';
-import type { ChangeEvent } from 'react';
 import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -14,8 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from 'recharts';
-import { analyzeStockLevel, AnalyzeStockLevelOutput } from '@/ai/flows/analyze-stock-level';
-import { FileUp, Lightbulb, Bot, BarChart2, Wrench, DoorOpen, DoorClosed } from 'lucide-react';
+import { BarChart2, Wrench, DoorOpen, DoorClosed } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { salesData } from '@/lib/data';
 import { ChartContainer } from '@/components/ui/chart';
@@ -58,15 +55,6 @@ function getVendApiUrl(): string {
   return '/api/machine/vend';
 }
 
-function fileToDataUri(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
 const salesByProduct = salesData.reduce((acc, sale) => {
   if (!acc[sale.productName]) {
     acc[sale.productName] = 0;
@@ -102,10 +90,6 @@ export function DashboardClient() {
   useEffect(() => {
     loadProducts();
   }, []);
-
-  const [analysisResult, setAnalysisResult] = useState<AnalyzeStockLevelOutput | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [fileName, setFileName] = useState('');
 
   const [freeVendLocation, setFreeVendLocation] = useState('');
   const [freeVendLoading, setFreeVendLoading] = useState(false);
@@ -300,37 +284,6 @@ export function DashboardClient() {
     }
   };
 
-  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsLoading(true);
-    setFileName(file.name);
-    setAnalysisResult(null);
-
-    try {
-      const dataUri = await fileToDataUri(file);
-      const result = await analyzeStockLevel({ photoDataUri: dataUri });
-      setAnalysisResult(result);
-    } catch (error) {
-      console.error('Analysis failed:', error);
-      toast({
-        variant: "destructive",
-        title: "L'analyse a échoué",
-        description: "L'IA n'a pas pu traiter l'image. Veuillez en essayer une autre.",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const productLevelsData = analysisResult
-    ? Object.entries(analysisResult.productLevels).map(([name, quantity]) => ({
-        name,
-        quantity,
-      }))
-    : [];
-
   const handleFreeVend = async () => {
     if (!freeVendLocation) return;
     setFreeVendLoading(true);
@@ -468,72 +421,6 @@ export function DashboardClient() {
       <Card className="lg:col-span-2">
         <CardHeader>
           <div className="flex items-center gap-2">
-            <Bot className="h-6 w-6" />
-            <CardTitle>Surveillance à Distance par IA</CardTitle>
-          </div>
-          <CardDescription>
-            Téléchargez une photo de l'intérieur du distributeur pour obtenir une analyse automatisée de l'inventaire et un contrôle de maintenance.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex w-full items-center space-x-2">
-            <Input id="picture" type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
-            <label htmlFor="picture" className="w-full">
-              <Button asChild className="w-full cursor-pointer">
-                <div>
-                  <FileUp className="mr-2 h-4 w-4" />
-                  {fileName || 'Choisir une image...'}
-                </div>
-              </Button>
-            </label>
-          </div>
-          {isLoading && (
-            <div className="mt-4 flex items-center justify-center gap-2 text-primary">
-              <div className="h-5 w-5 animate-spin rounded-full border-b-2 border-primary"></div>
-              <span>Analyse de l'image en cours... Cela peut prendre un moment.</span>
-            </div>
-          )}
-        </CardContent>
-        {analysisResult && (
-          <CardFooter className="flex-col items-start gap-4">
-            <Alert variant={analysisResult.needsRefill || analysisResult.maintenanceRequired ? 'destructive' : 'default'}>
-              <Lightbulb className="h-4 w-4" />
-              <AlertTitle>Résumé de l'Analyse IA</AlertTitle>
-              <AlertDescription>{analysisResult.analysis}</AlertDescription>
-            </Alert>
-            <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="flex items-center gap-2">
-                <h3 className="font-semibold">État du stock:</h3>
-                <Badge variant={analysisResult.needsRefill ? 'destructive' : 'default'}>
-                  {analysisResult.needsRefill ? 'Remplissage Requis' : 'Niveaux de stock OK'}
-                </Badge>
-              </div>
-              <div className="flex items-center gap-2">
-                <Wrench className="h-4 w-4" />
-                <h3 className="font-semibold">Maintenance:</h3>
-                <Badge variant={analysisResult.maintenanceRequired ? 'destructive' : 'default'}>
-                  {analysisResult.maintenanceRequired ? 'Requise' : 'OK'}
-                </Badge>
-              </div>
-            </div>
-            <div className="w-full">
-                <h3 className="font-semibold mb-2">Niveaux de produits détectés</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={productLevelsData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} interval={0} tick={{ fontSize: 12 }} />
-                    <YAxis allowDecimals={false} />
-                    <Bar dataKey="quantity" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-            </div>
-          </CardFooter>
-        )}
-      </Card>
-
-      <Card className="lg:col-span-2">
-        <CardHeader>
-          <div className="flex items-center gap-2">
             <Wrench className="h-6 w-6" />
             <CardTitle>Free Vend (Test)</CardTitle>
           </div>
@@ -551,7 +438,7 @@ export function DashboardClient() {
               {productsLoading ? 'Chargement...' : 'Sync produits → cache offline'}
             </Button>
             <div className="text-sm text-muted-foreground">
-              Utilise Firestore si disponible, sinon l'écran du Pi peut lire le cache local.
+              Utilise le catalogue local synchronisé avec Fleet Manager.
             </div>
           </div>
 

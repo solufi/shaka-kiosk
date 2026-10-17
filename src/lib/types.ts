@@ -1,5 +1,3 @@
-import type { Timestamp } from 'firebase/firestore';
-
 export type Product = {
   id: string;
   name: string;
@@ -29,5 +27,5 @@ export type Sale = {
   productName: string;
   quantity: number;
   amount: number;
-  saleDate: Timestamp;
+  saleDate: { seconds: number; nanoseconds: number };
 };

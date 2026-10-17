@@ -12,8 +12,6 @@ import {
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { LogIn, Delete } from 'lucide-react';
-import { useAuth } from '@/firebase';
-import { initiateAnonymousSignIn } from '@/firebase/non-blocking-login';
 import { useToast } from '@/hooks/use-toast';
 
 const ADMIN_PASSWORD = '211288'; // Simple hardcoded password
@@ -21,7 +19,6 @@ const ADMIN_PASSWORD = '211288'; // Simple hardcoded password
 export function KeypadLoginDialog() {
   const [isOpen, setIsOpen] = useState(false);
   const [password, setPassword] = useState('');
-  const auth = useAuth();
   const { toast } = useToast();
 
   const handleKeyPress = (key: string) => {
@@ -42,7 +39,6 @@ export function KeypadLoginDialog() {
       } catch {
         // ignore
       }
-      if (auth) initiateAnonymousSignIn(auth);
       toast({
         title: 'Connexion réussie',
         description: 'Bienvenue, Administrateur.',
