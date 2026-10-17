@@ -1,9 +1,10 @@
-import * as functions from "firebase-functions";
-import * as admin from "firebase-admin";
+import * as functions from "firebase-functions/v1";
+import { initializeApp } from "firebase-admin/app";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import cors from "cors";
 
 // Initialize Firebase Admin
-admin.initializeApp();
+initializeApp();
 
 // Initialize CORS
 const corsHandler = cors({ origin: true });
@@ -57,13 +58,13 @@ export const vendProduct = functions.https.onRequest(async (req, res) => {
       const sequence = locationToSequence(location);
       
       // Log the vending attempt
-      const db = admin.firestore();
+      const db = getFirestore();
       const vendRef = await db.collection('vendOperations').add({
         location,
         sequence,
         machineId,
         status: 'pending',
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        timestamp: FieldValue.serverTimestamp(),
       });
 
       // In a real implementation, this would:
@@ -79,7 +80,7 @@ export const vendProduct = functions.https.onRequest(async (req, res) => {
           
           await vendRef.update({
             status: success ? 'success' : 'failed',
-            completedAt: admin.firestore.FieldValue.serverTimestamp(),
+            completedAt: FieldValue.serverTimestamp(),
             dropDetected: success,
           });
 
@@ -97,7 +98,7 @@ export const vendProduct = functions.https.onRequest(async (req, res) => {
               if (currentQuantity > 0) {
                 await productDoc.ref.update({
                   quantity: currentQuantity - 1,
-                  lastVended: admin.firestore.FieldValue.serverTimestamp(),
+                  lastVended: FieldValue.serverTimestamp(),
                 });
               }
             }
@@ -106,7 +107,7 @@ export const vendProduct = functions.https.onRequest(async (req, res) => {
             await db.collection('sales').add({
               location,
               machineId,
-              timestamp: admin.firestore.FieldValue.serverTimestamp(),
+              timestamp: FieldValue.serverTimestamp(),
               status: 'completed',
             });
           }
@@ -115,7 +116,7 @@ export const vendProduct = functions.https.onRequest(async (req, res) => {
           await vendRef.update({
             status: 'error',
             error: errorToMessage(error),
-            completedAt: admin.firestore.FieldValue.serverTimestamp(),
+            completedAt: FieldValue.serverTimestamp(),
           });
         }
       }, 2000); // Simulate 2-second vending process
@@ -143,7 +144,7 @@ export const getMachineStatus = functions.https.onRequest(async (req, res) => {
     try {
       const { machineId = 'default-machine' } = req.query;
 
-      const db = admin.firestore();
+      const db = getFirestore();
       
       // Get recent operations
       const recentOps = await db.collection('vendOperations')
@@ -203,7 +204,7 @@ export const getVendStatus = functions.https.onRequest(async (req, res) => {
         return res.status(400).json({ error: 'Operation ID is required' });
       }
 
-      const db = admin.firestore();
+      const db = getFirestore();
       const operationDoc = await db.collection('vendOperations').doc(operationId as string).get();
 
       if (!operationDoc.exists) {
@@ -238,10 +239,10 @@ export const configureMachine = functions.https.onRequest(async (req, res) => {
         return res.status(400).json({ error: 'Settings are required' });
       }
 
-      const db = admin.firestore();
+      const db = getFirestore();
       await db.collection('machines').doc(machineId).set({
         ...settings,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
 
       return res.status(200).json({
