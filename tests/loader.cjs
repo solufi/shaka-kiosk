@@ -6,7 +6,7 @@ class Response {
 }
 function loader(root, env, stubs = {}, globals = {}) {
   const cache = new Map();
-  const ctx = vm.createContext({ console, process: { env, pid: process.pid, cwd: () => root }, Buffer, crypto, URL, Headers, Uint8Array, TextEncoder, AbortController, Date, setTimeout, clearTimeout, ...globals });
+  const ctx = vm.createContext({ console, process: { env, pid: process.pid, cwd: () => root }, Buffer, crypto, URL, Headers, Uint8Array, TextEncoder, AbortController, AbortSignal, Date, setTimeout, clearTimeout, ...globals });
   function load(file) {
     file = path.resolve(file); if (!path.extname(file)) file += '.ts';
     if (cache.has(file)) return cache.get(file).exports;

@@ -1,3 +1,4 @@
+import { localAgentAuthorized } from '@/lib/local-agent-auth';
 import { NextResponse } from 'next/server';
 import path from 'path';
 import { randomUUID } from 'crypto';
@@ -36,6 +37,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  if (!localAgentAuthorized(req)) return NextResponse.json({ok:false},{status:401});
   try {
     const body = await req.json();
     const data = (body && (body.products ?? body.data)) as unknown;

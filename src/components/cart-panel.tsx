@@ -34,14 +34,7 @@ const DOOR_POLL_INTERVAL_MS = 1000;
 const SUCCESS_DISPLAY_MS = 8000;
 
 function getVendApiBase(): string {
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://127.0.0.1:5001';
-    }
-    return `http://${hostname}:5001`;
-  }
-  return 'http://127.0.0.1:5001';
+  return '/api/machine';
 }
 
 interface PlaceholderImage {
@@ -179,7 +172,8 @@ export function CartPanel({
             machineId: MACHINE_ID,
             productId: item.id,
             commandId: `${purchaseIdRef.current}:${item.id}:${q}`,
-            sessionId: freeVendRef.current ? undefined : purchaseIdRef.current,
+            sessionId: purchaseIdRef.current,
+            free: freeVendRef.current,
             useRelay: item.useRelay || false,
           };
 
@@ -340,6 +334,16 @@ export function CartPanel({
     // Fully subsidized vend (total = 0, e.g. 100% corporate code): no card
     // payment is possible/needed. Go straight to dispensing.
     if (total <= 0) {
+      try {
+        const response = await fetch(`${getVendApiBase()}/purchase/free`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+          items:cartItems.map(item=>({productId:item.id,price:Math.round(item.price*100),qty:item.orderQuantity})),promoCode:appliedPromo?.code
+        })});
+        const grant=await response.json();
+        if(!response.ok || !grant.ok)throw new Error(grant.error || 'Autorisation refusée');
+        purchaseIdRef.current=grant.sessionId;
+      } catch(error) {
+        setPaymentError(error instanceof Error?error.message:'Autorisation indisponible');setPaymentState('denied');return;
+      }
       freeVendRef.current = true;
       setPaymentState('approved');
       return;

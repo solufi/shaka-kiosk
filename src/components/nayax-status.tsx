@@ -28,11 +28,11 @@ function getBaseUrl(): string {
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://127.0.0.1:5001';
+      return '/api/machine';
     }
     return `http://${hostname}:5001`;
   }
-  return 'http://127.0.0.1:5001';
+  return '/api/machine';
 }
 
 export function NayaxStatus() {

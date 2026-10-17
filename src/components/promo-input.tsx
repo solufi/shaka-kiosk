@@ -50,7 +50,7 @@ export function PromoInput({
     setValidating(true);
     setError(null);
     try {
-      const res = await fetch('http://127.0.0.1:5001/corporate/validate', {
+      const res = await fetch('/api/machine/corporate/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: clean, machineId, redeem: false }),

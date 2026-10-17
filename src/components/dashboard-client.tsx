@@ -48,14 +48,14 @@ function getVendApiUrl(): string {
     const hostname = window.location.hostname;
     // If accessing from the Pi itself (localhost or 127.0.0.1)
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://127.0.0.1:5001/vend';
+      return '/api/machine/vend';
     }
     // If accessing via Pi's IP address, use that same IP for vend server
     return `http://${hostname}:5001/vend`;
   }
   
   // Fallback for SSR
-  return 'http://127.0.0.1:5001/vend';
+  return '/api/machine/vend';
 }
 
 function fileToDataUri(file: File): Promise<string> {
@@ -438,7 +438,7 @@ export function DashboardClient() {
         (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
       const currentHost = typeof window !== 'undefined' ? window.location.hostname : '192.168.2.169';
       const doorStatusUrl = isLocalhost ? 
-        'http://127.0.0.1:5001/door-status' : 
+        '/api/machine/door-status' :
         `http://${currentHost}:5001/door-status`;
       
       const response = await fetch(doorStatusUrl);
