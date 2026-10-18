@@ -63,5 +63,6 @@
   },
   "overrides": {
     "postcss": "$postcss"
-  }
+  },
+  "employeeWithdrawalProtocol": 1
 }

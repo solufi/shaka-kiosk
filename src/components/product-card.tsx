@@ -49,6 +49,7 @@ interface PlaceholderImage {
 
 interface ProductCardProps {
   product: Product;
+  employeeMode?: "included" | "paid" | "blocked";
   placeholderImages?: PlaceholderImage[];
   onAddToCart: (product: Product) => void;
   onUpdateProduct: (product: Product) => void;
@@ -72,12 +73,13 @@ const formSchema = z.object({
 });
 
 
-export function ProductCard({ product, placeholderImages, onAddToCart, onUpdateProduct, onDeleteProduct, onMove, isFirst, isLast }: ProductCardProps) {
+export function ProductCard({ product, employeeMode, placeholderImages, onAddToCart, onUpdateProduct, onDeleteProduct, onMove, isFirst, isLast }: ProductCardProps) {
   const placeholder = (placeholderImages || []).find((p) => p.id === product.imageId);
   const fallbackExts = ['.webp', '.png', '.jpg'];
   const [extIdx, setExtIdx] = useState(0);
   const imageUrl = placeholder ? placeholder.imageUrl : `/images/products/${product.imageId}${fallbackExts[extIdx] || '.webp'}`;
   const isSoldOut = product.quantity <= 0;
+  const priceLabel=employeeMode==='included'?'Fourni par l’entreprise':employeeMode==='blocked'?'Non autorisé':new Intl.NumberFormat('fr-CA',{style:'currency',currency:'CAD'}).format(product.price);
   const [isDetailViewOpen, setIsDetailViewOpen] = useState(false);
   const [isEditViewOpen, setIsEditViewOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -219,7 +221,7 @@ export function ProductCard({ product, placeholderImages, onAddToCart, onUpdateP
               </CardHeader>
               <CardContent className="flex-1 p-4">
                 <CardTitle className="text-lg font-bold">{product.name}</CardTitle>
-                <p className="mt-2 text-2xl font-headline font-bold text-primary">${product.price.toFixed(2)}</p>
+                <p className="mt-2 text-2xl font-headline font-bold text-primary">{priceLabel}</p>
               </CardContent>
             </div>
           </DialogTrigger>
@@ -227,7 +229,7 @@ export function ProductCard({ product, placeholderImages, onAddToCart, onUpdateP
             <Button
               className="w-full"
               onClick={() => onAddToCart(product)}
-              disabled={isSoldOut}
+              disabled={isSoldOut || employeeMode==='blocked'}
               aria-label={`Ajouter ${product.name} au panier`}
             >
               <PlusCircle className="mr-2 h-5 w-5" />
@@ -269,7 +271,7 @@ export function ProductCard({ product, placeholderImages, onAddToCart, onUpdateP
             <Separator className="my-4" />
 
             <div className="flex items-baseline justify-between">
-              <p className="text-3xl font-bold text-primary">${product.price.toFixed(2)}</p>
+              <p className="text-3xl font-bold text-primary">{priceLabel}</p>
               {isSoldOut ? (
                 <Badge variant="destructive">Épuisé</Badge>
               ) : (
@@ -284,7 +286,7 @@ export function ProductCard({ product, placeholderImages, onAddToCart, onUpdateP
               <DialogClose asChild>
                 <Button
                     onClick={() => onAddToCart(product)}
-                    disabled={isSoldOut}
+                    disabled={isSoldOut || employeeMode==='blocked'}
                     aria-label={`Ajouter ${product.name} au panier`}
                 >
                     <PlusCircle className="mr-2 h-5 w-5" />

@@ -1,5 +1,6 @@
 'use client';
 import Image from 'next/image';
+import {EmployeeCartPanel} from './employee-cart-panel';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { CartItem, Product } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -44,7 +45,7 @@ interface PlaceholderImage {
   imageHint: string;
 }
 
-interface CartPanelProps {
+export interface CartPanelProps {
   cartItems: CartItem[];
   onUpdateQuantity: (productId: string, newQuantity: number) => void;
   onRemoveItem: (productId: string) => void;
@@ -64,7 +65,7 @@ type PaymentState =
   | 'denied'
   | 'timeout';
 
-export function CartPanel({
+function RetailCartPanel({
   cartItems,
   onUpdateQuantity,
   onRemoveItem,
@@ -809,4 +810,12 @@ export function CartPanel({
       </Card>
     </>
   );
+}
+
+export function CartPanel(props:CartPanelProps){
+ const [config,setConfig]=useState<any>(null),[error,setError]=useState('');
+ const load=useCallback(async()=>{try{const d=await fetch('/api/machine/employee/config',{cache:'no-store'}).then(r=>r.json());if(!d.ok)throw Error(d.error||'Configuration indisponible');setConfig(d);setError('');}catch(e){setError((e as Error).message);}},[]);
+ useEffect(()=>{void load();},[load]);
+ if(!config)return <div className="rounded-xl border p-5"><p>{error||'Chargement de la machine…'}</p>{error&&<button className="mt-4 underline" onClick={()=>void load()}>Réessayer</button>}</div>;
+ return config.enabled?<EmployeeCartPanel {...props} config={config}/>:<RetailCartPanel {...props}/>;
 }
