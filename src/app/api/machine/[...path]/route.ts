@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
-const reads = new Set(['health','stripe/status','door-status','proximity/status','proximity/summary','proximity/stats/today','proximity/events','nayax/status']);
-const writes = new Set(['purchase/free','stripe/pay','stripe/cancel','stripe/reset','stripe/vend-result','corporate/validate','vend','fridge/access','fridge/status','receipt/send']);
+const reads = new Set(['employee/config','health','stripe/status','door-status','proximity/status','proximity/summary','proximity/stats/today','proximity/events','nayax/status']);
+const writes = new Set(['employee/prepare','employee/start','employee/finish','employee/cancel','purchase/free','stripe/pay','stripe/cancel','stripe/reset','stripe/vend-result','corporate/validate','vend','fridge/access','fridge/status','receipt/send']);
 async function proxy(request: NextRequest, ctx: {params: Promise<{path: string[]}>}) {
   const route = (await ctx.params).path.join('/');
   if (!(request.method === 'GET' ? reads : writes).has(route)) return NextResponse.json({ok:false},{status:404});

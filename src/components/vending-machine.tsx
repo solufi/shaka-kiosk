@@ -36,6 +36,8 @@ export function VendingMachine() {
 
   const [products, setProducts] = useState<Product[] | null>(null);
   const [productsLoading, setProductsLoading] = useState(true);
+  const [employeeConfig,setEmployeeConfig]=useState<any>(null);
+  useEffect(()=>{fetch('/api/machine/employee/config',{cache:'no-store'}).then(r=>r.json()).then(d=>{if(d.ok)setEmployeeConfig(d);}).catch(()=>{});},[]);
 
   const loadProducts = async () => {
     // 1) Immediately show localStorage cache (instant display)
@@ -123,8 +125,11 @@ export function VendingMachine() {
   
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isPersonNearby, setIsPersonNearby] = useState(false);
+  const [employeePending,setEmployeePending]=useState(false);
+  useEffect(()=>{const update=()=>{const pending=!!sessionStorage.getItem('shaka.employee.pending');setEmployeePending(pending);if(pending)setIsPersonNearby(true);};update();window.addEventListener('shaka:employee-session',update);return()=>window.removeEventListener('shaka:employee-session',update);},[]);
 
   const handleIdle = () => {
+    if(sessionStorage.getItem('shaka.employee.pending') || document.querySelector('dialog[open]'))return;
     setIsPersonNearby(false);
     handleClearCart();
   };
@@ -143,11 +148,14 @@ export function VendingMachine() {
   const handleAddToCart = (product: Product) => {
     handleInteraction();
     if (product.quantity <= 0) return;
+    const policy=employeeConfig?.enabled?employeeConfig.policies?.find((p:any)=>p.productId===product.id):null;
+    if(employeeConfig?.enabled&&(!policy||policy.mode==='blocked'))return;
+    const maximum=Math.min(product.quantity,policy?.maxQuantity||product.quantity);
 
     setCartItems((prevCart) => {
       const existingItem = prevCart.find((item) => item.id === product.id);
       if (existingItem) {
-        if (existingItem.orderQuantity < product.quantity) {
+        if (existingItem.orderQuantity < maximum) {
           return prevCart.map((item) =>
             item.id === product.id
               ? { ...item, orderQuantity: item.orderQuantity + 1 }
@@ -211,7 +219,7 @@ export function VendingMachine() {
   };
 
   
-  const isCartVisible = cartItems.length > 0;
+  const isCartVisible = cartItems.length > 0 || employeePending;
 
   if (!isPersonNearby) {
     return <Screensaver onInteraction={handleInteraction} />;
@@ -288,6 +296,7 @@ export function VendingMachine() {
               placeholderImages={PlaceHolderImages}
               key={product.id}
               product={product}
+              employeeMode={employeeConfig?.enabled?(employeeConfig.policies?.find((p:any)=>p.productId===product.id)?.mode||'blocked'):undefined}
               onAddToCart={handleAddToCart}
               onUpdateProduct={handleUpdateProduct}
               onDeleteProduct={handleDeleteProduct}
