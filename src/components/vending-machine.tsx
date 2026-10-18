@@ -11,6 +11,8 @@ import { Card, CardContent, CardFooter } from './ui/card';
 import { cn } from '@/lib/utils';
 import { Screensaver } from './screensaver';
 import { useIdle } from '@/hooks/use-idle';
+import { useDisplayLayout } from '@/hooks/use-display-layout';
+import { arrangeProducts, displayColumns } from '@/lib/display-layout';
 
 function safeStorageGet(key: string): string | null {
   try {
@@ -220,6 +222,8 @@ export function VendingMachine() {
 
   
   const isCartVisible = cartItems.length > 0 || employeePending;
+  const display = useDisplayLayout(isCartVisible || doorAlert.isOpen, isPersonNearby && !productsLoading);
+  const displayedProducts = arrangeProducts(products ?? [], display);
 
   if (!isPersonNearby) {
     return <Screensaver onInteraction={handleInteraction} />;
@@ -290,8 +294,8 @@ export function VendingMachine() {
           isCartVisible ? 'lg:col-span-2' : 'lg:col-span-3'
         )}
       >
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-4">
-          {(products ?? []).map((product, index) => (
+        <div data-testid="catalog-grid" className="grid gap-4" style={{ gridTemplateColumns: displayColumns(display.columns) }}>
+          {displayedProducts.map((product, index) => (
             <ProductCard
               placeholderImages={PlaceHolderImages}
               key={product.id}
@@ -302,11 +306,11 @@ export function VendingMachine() {
               onDeleteProduct={handleDeleteProduct}
               onMove={handleMoveProduct}
               isFirst={index === 0}
-              isLast={(products ?? []).length - 1 === index}
+              isLast={displayedProducts.length - 1 === index}
             />
           ))}
 
-          {(products ?? []).length === 0 && (
+          {displayedProducts.length === 0 && (
             <Card className="lg:col-span-3">
               <CardContent className="p-6 text-center">
                 <div className="text-lg font-semibold">Aucun produit disponible</div>
