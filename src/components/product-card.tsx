@@ -79,6 +79,7 @@ export function ProductCard({ product, employeeMode, placeholderImages, onAddToC
   const [extIdx, setExtIdx] = useState(0);
   const imageUrl = placeholder ? placeholder.imageUrl : `/images/products/${product.imageId}${fallbackExts[extIdx] || '.webp'}`;
   const isSoldOut = product.quantity <= 0;
+  const stockLabel = isSoldOut ? 'Épuisé' : `${product.quantity} ${product.quantity === 1 ? 'restant' : 'restants'}`;
   const priceLabel=employeeMode==='included'?'Fourni par l’entreprise':employeeMode==='blocked'?'Non autorisé':new Intl.NumberFormat('fr-CA',{style:'currency',currency:'CAD'}).format(product.price);
   const [isDetailViewOpen, setIsDetailViewOpen] = useState(false);
   const [isEditViewOpen, setIsEditViewOpen] = useState(false);
@@ -225,9 +226,12 @@ export function ProductCard({ product, employeeMode, placeholderImages, onAddToC
               </CardContent>
             </div>
           </DialogTrigger>
-          <CardFooter className="p-4 pt-0">
+          <CardFooter className="flex-wrap gap-2 p-4 pt-0">
+            <Badge variant={isSoldOut ? "destructive" : "outline"} className="shrink-0 whitespace-nowrap py-2" aria-label={`Stock de ${product.name} : ${Math.max(0, product.quantity)}`}>
+              {stockLabel}
+            </Badge>
             <Button
-              className="w-full"
+              className="flex-1"
               onClick={() => onAddToCart(product)}
               disabled={isSoldOut || employeeMode==='blocked'}
               aria-label={`Ajouter ${product.name} au panier`}
@@ -238,7 +242,7 @@ export function ProductCard({ product, employeeMode, placeholderImages, onAddToC
           </CardFooter>
         </Card>
 
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-[425px]">
           <DialogHeader>
             <div className="relative aspect-video w-full overflow-hidden rounded-lg">
               <Image
@@ -272,19 +276,16 @@ export function ProductCard({ product, employeeMode, placeholderImages, onAddToC
 
             <div className="flex items-baseline justify-between">
               <p className="text-3xl font-bold text-primary">{priceLabel}</p>
-              {isSoldOut ? (
-                <Badge variant="destructive">Épuisé</Badge>
-              ) : (
-                <Badge>{product.quantity} en stock</Badge>
-              )}
             </div>
           </div>
-          <DialogFooter className="sm:justify-between flex-row">
-              <DialogClose asChild>
-                  <Button variant="outline">Fermer</Button>
-              </DialogClose>
+          <DialogFooter className="flex-col gap-3 sm:flex-col sm:space-x-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={isSoldOut ? "destructive" : "outline"} className="shrink-0 whitespace-nowrap py-2" aria-label={`Stock de ${product.name} : ${Math.max(0, product.quantity)}`}>
+                {stockLabel}
+              </Badge>
               <DialogClose asChild>
                 <Button
+                    className="flex-1"
                     onClick={() => onAddToCart(product)}
                     disabled={isSoldOut || employeeMode==='blocked'}
                     aria-label={`Ajouter ${product.name} au panier`}
@@ -293,6 +294,10 @@ export function ProductCard({ product, employeeMode, placeholderImages, onAddToC
                     Ajouter au panier
                 </Button>
               </DialogClose>
+            </div>
+            <DialogClose asChild>
+              <Button variant="outline">Fermer</Button>
+            </DialogClose>
           </DialogFooter>
         </DialogContent>
       </Dialog>
