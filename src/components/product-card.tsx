@@ -79,7 +79,7 @@ export function ProductCard({ product, employeeMode, placeholderImages, onAddToC
   const [extIdx, setExtIdx] = useState(0);
   const imageUrl = placeholder ? placeholder.imageUrl : `/images/products/${product.imageId}${fallbackExts[extIdx] || '.webp'}`;
   const isSoldOut = product.quantity <= 0;
-  const stockLabel = isSoldOut ? 'Épuisé' : `${product.quantity} ${product.quantity === 1 ? 'restant' : 'restants'}`;
+  const stockLabel = product.stockUnavailable ? 'Stock à vérifier' : isSoldOut ? 'Épuisé' : `${product.quantity} ${product.quantity === 1 ? 'restant' : 'restants'}`;
   const priceLabel=employeeMode==='included'?'Fourni par l’entreprise':employeeMode==='blocked'?'Non autorisé':new Intl.NumberFormat('fr-CA',{style:'currency',currency:'CAD'}).format(product.price);
   const [isDetailViewOpen, setIsDetailViewOpen] = useState(false);
   const [isEditViewOpen, setIsEditViewOpen] = useState(false);
@@ -146,7 +146,7 @@ export function ProductCard({ product, employeeMode, placeholderImages, onAddToC
                     />
                   {isSoldOut && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                      <Badge variant="destructive" className="text-lg">ÉPUISÉ</Badge>
+                      <Badge variant="destructive" className="text-lg">{product.stockUnavailable ? "À VÉRIFIER" : "ÉPUISÉ"}</Badge>
                     </div>
                   )}
                   {isAdmin && (
@@ -227,7 +227,7 @@ export function ProductCard({ product, employeeMode, placeholderImages, onAddToC
             </div>
           </DialogTrigger>
           <CardFooter className="flex-wrap gap-2 p-4 pt-0">
-            <Badge variant={isSoldOut ? "destructive" : "outline"} className="shrink-0 whitespace-nowrap py-2" aria-label={`Stock de ${product.name} : ${Math.max(0, product.quantity)}`}>
+            <Badge variant={isSoldOut ? "destructive" : "outline"} className="shrink-0 whitespace-nowrap py-2" aria-label={`Stock de ${product.name} : ${product.stockUnavailable ? "indisponible" : Math.max(0, product.quantity)}`}>
               {stockLabel}
             </Badge>
             <Button
@@ -280,7 +280,7 @@ export function ProductCard({ product, employeeMode, placeholderImages, onAddToC
           </div>
           <DialogFooter className="flex-col gap-3 sm:flex-col sm:space-x-0">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={isSoldOut ? "destructive" : "outline"} className="shrink-0 whitespace-nowrap py-2" aria-label={`Stock de ${product.name} : ${Math.max(0, product.quantity)}`}>
+              <Badge variant={isSoldOut ? "destructive" : "outline"} className="shrink-0 whitespace-nowrap py-2" aria-label={`Stock de ${product.name} : ${product.stockUnavailable ? "indisponible" : Math.max(0, product.quantity)}`}>
                 {stockLabel}
               </Badge>
               <DialogClose asChild>

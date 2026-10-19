@@ -65,5 +65,6 @@
     "postcss": "$postcss"
   },
   "employeeWithdrawalProtocol": 1,
-  "displayProtocol": 1
+  "displayProtocol": 1,
+  "multiSlotProtocol": 1
 }
