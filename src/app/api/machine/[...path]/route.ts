@@ -17,7 +17,7 @@ async function proxy(request: NextRequest, ctx: {params: Promise<{path: string[]
   try {
     const response = await fetch(`http://127.0.0.1:${process.env.VEND_SERVER_PORT || '5001'}/${route}`, {
       method: request.method, headers: {'Content-Type':'application/json','x-agent-token':token}, body,
-      cache:'no-store', signal:AbortSignal.timeout(180000), redirect:'error'
+      cache:'no-store', signal:AbortSignal.timeout(route === 'vend' ? 300000 : 180000), redirect:'error'
     });
     return new NextResponse(await response.text(),{status:response.status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
   } catch { return NextResponse.json({ok:false,error:'Machine indisponible, résultat à vérifier avant tout nouvel essai'},{status:503}); }

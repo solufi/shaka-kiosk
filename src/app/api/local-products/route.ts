@@ -32,7 +32,18 @@ async function writeCache(data: unknown): Promise<void> {
 }
 
 export async function GET() {
-  const data = await readCache();
+  let data = await readCache();
+  if (data?.some((p: any) => p.slots)) {
+    try {
+      const response = await fetch(`http://127.0.0.1:${process.env.VEND_SERVER_PORT || '5001'}/inventory`, {cache:'no-store',signal:AbortSignal.timeout(2000)});
+      const live = await response.json();
+      if (!response.ok || !live.ok || !Array.isArray(live.data)) throw new Error('Inventory unavailable');
+      data = live.data;
+    } catch {
+      // Never advertise stale per-row counters after a vend-server interruption.
+      data = (data || []).map((p:any)=>p.slots?{...p,quantity:0,stockUnavailable:true}:p);
+    }
+  }
   return NextResponse.json({ ok: true, data: data ?? [] });
 }
 

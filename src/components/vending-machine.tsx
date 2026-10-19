@@ -126,6 +126,12 @@ export function VendingMachine() {
   }, []);
   
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  useEffect(() => {
+    if (cartItems.length) return;
+    void loadProducts();
+    const timer = setInterval(() => { if (document.visibilityState === 'visible') void loadProducts(); }, 15000);
+    return () => clearInterval(timer);
+  }, [cartItems.length]);
   const [isPersonNearby, setIsPersonNearby] = useState(false);
   const [employeePending,setEmployeePending]=useState(false);
   useEffect(()=>{const update=()=>{const pending=!!sessionStorage.getItem('shaka.employee.pending');setEmployeePending(pending);if(pending)setIsPersonNearby(true);};update();window.addEventListener('shaka:employee-session',update);return()=>window.removeEventListener('shaka:employee-session',update);},[]);
