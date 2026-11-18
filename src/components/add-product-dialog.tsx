@@ -35,14 +35,14 @@ interface AddProductDialogProps {
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Le nom doit contenir au moins 2 caractères.' }),
-  price: z.coerce.number().positive({ message: 'Le prix doit être un nombre positif.' }),
-  quantity: z.coerce.number().int().min(0, { message: 'La quantité ne peut pas être négative.' }),
+  price: z.coerce.number<number>().positive({ message: 'Le prix doit être un nombre positif.' }),
+  quantity: z.coerce.number<number>().int().min(0, { message: 'La quantité ne peut pas être négative.' }),
   location: z.string().optional(),
   description: z.string().min(10, { message: 'La description doit contenir au moins 10 caractères.' }),
   imageId: z.string().min(1, { message: "L'image est requise." }),
   useRelay: z.boolean().default(false),
   nutrition: z.object({
-    calories: z.coerce.number().min(0).optional(),
+    calories: z.coerce.number<number>().min(0).optional(),
     fat: z.string().optional(),
     sugar: z.string().optional(),
     protein: z.string().optional(),
@@ -63,7 +63,7 @@ const formSchema = z.object({
 
 export function AddProductDialog({ onCreateProduct }: AddProductDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm<z.input<typeof formSchema>, unknown, z.output<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: '',

@@ -1,4 +1,5 @@
 'use client';
+import { settlePayment } from '@/lib/payment-settlement';
 import Image from 'next/image';
 import {EmployeeCartPanel} from './employee-cart-panel';
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -141,10 +142,16 @@ function RetailCartPanel({
     freeVendRef.current = false;
   }, []);
 
-  const handlePaymentFailed = useCallback(() => {
-    fetch(`${getVendApiBase()}/stripe/reset`, { method: 'POST' }).catch(
-      () => {}
-    );
+  const handlePaymentFailed = useCallback(async () => {
+    try {
+      const response = await fetch(`${getVendApiBase()}/stripe/reset`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:purchaseIdRef.current})});
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error('Règlement à vérifier');
+    } catch {
+      setPaymentError('Paiement à vérifier avant un nouvel achat. Veuillez contacter le service client.');
+      setPaymentState('vend_failed');
+      return;
+    }
     onClearCart();
     resetPayment();
   }, [onClearCart, resetPayment]);
@@ -272,13 +279,7 @@ function RetailCartPanel({
     // A free vend has no Stripe Terminal session to capture/cancel.
     if (!freeVendRef.current) {
       try {
-        const settlement = await fetch(`${base}/stripe/vend-result`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ success: allDropsOk, sessionId: purchaseIdRef.current }),
-        });
-        const outcome = await settlement.json();
-        if (!settlement.ok || !outcome.ok) throw new Error(outcome.error || 'Paiement à vérifier');
+        await settlePayment(base, purchaseIdRef.current, setDispensingItem);
       } catch (err) {
         setPaymentError('Votre paiement doit être vérifié. Veuillez contacter le service client.');
         setPaymentState('vend_failed');
@@ -298,7 +299,7 @@ function RetailCartPanel({
   const cancelPayment = useCallback(async () => {
     try {
       const base = getVendApiBase();
-      const response = await fetch(`${base}/stripe/cancel`, { method: 'POST' });
+      const response = await fetch(`${base}/stripe/cancel`, { method: 'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:purchaseIdRef.current}) });
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error || 'Annulation non confirmée');
     } catch (e) {

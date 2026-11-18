@@ -33,15 +33,15 @@ async function writeCache(data: unknown): Promise<void> {
 
 export async function GET() {
   let data = await readCache();
-  if (data?.some((p: any) => p.slots)) {
+  if (data?.length) {
     try {
       const response = await fetch(`http://127.0.0.1:${process.env.VEND_SERVER_PORT || '5001'}/inventory`, {cache:'no-store',signal:AbortSignal.timeout(2000)});
       const live = await response.json();
       if (!response.ok || !live.ok || !Array.isArray(live.data)) throw new Error('Inventory unavailable');
       data = live.data;
     } catch {
-      // Never advertise stale per-row counters after a vend-server interruption.
-      data = (data || []).map((p:any)=>p.slots?{...p,quantity:0,stockUnavailable:true}:p);
+      // All physical counters are durable in the agent, including single rows.
+      data = (data || []).map((p:any)=>({...p,quantity:0,stockUnavailable:true}));
     }
   }
   return NextResponse.json({ ok: true, data: data ?? [] });
