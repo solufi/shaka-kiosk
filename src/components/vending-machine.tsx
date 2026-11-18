@@ -201,8 +201,7 @@ export function VendingMachine() {
 
   const handlePurchase = async () => {
     handleInteraction();
-    // Note: Purchase logic will be handled by cart-panel with payment flow
-    // This is just a placeholder - the actual vend happens after payment approval
+    await loadProducts();
   };
 
   const handleUpdateProduct = async (updatedProduct: Product) => {

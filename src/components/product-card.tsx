@@ -61,8 +61,8 @@ interface ProductCardProps {
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Le nom doit contenir au moins 2 caractères.' }),
-  price: z.coerce.number().positive({ message: 'Le prix doit être un nombre positif.' }),
-  quantity: z.coerce.number().int().min(0, { message: 'La quantité ne peut pas être négative.' }),
+  price: z.coerce.number<number>().positive({ message: 'Le prix doit être un nombre positif.' }),
+  quantity: z.coerce.number<number>().int().min(0, { message: 'La quantité ne peut pas être négative.' }),
   location: z
     .string()
     .min(1, { message: "L'emplacement est requis (ex: 10)." })
@@ -103,7 +103,7 @@ export function ProductCard({ product, employeeMode, placeholderImages, onAddToC
     };
   }, []);
 
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm<z.input<typeof formSchema>, unknown, z.output<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: product.name,
