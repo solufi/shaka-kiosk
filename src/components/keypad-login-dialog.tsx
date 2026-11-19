@@ -14,11 +14,11 @@ import { Input } from './ui/input';
 import { LogIn, Delete } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const ADMIN_PASSWORD = '211288'; // Simple hardcoded password
 
 export function KeypadLoginDialog() {
   const [isOpen, setIsOpen] = useState(false);
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
   const handleKeyPress = (key: string) => {
@@ -31,28 +31,22 @@ export function KeypadLoginDialog() {
     setPassword(password.slice(0, -1));
   };
 
-  const handleLogin = () => {
-    if (password === ADMIN_PASSWORD) {
-      try {
-        window.localStorage.setItem('shaka:isAdmin', '1');
-        window.dispatchEvent(new Event('shaka-admin-changed'));
-      } catch {
-        // ignore
-      }
-      toast({
-        title: 'Connexion réussie',
-        description: 'Bienvenue, Administrateur.',
-      });
+  const handleLogin = async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const response = await fetch('/api/admin/session', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:password})});
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error || 'Connexion impossible');
+      window.localStorage.setItem('shaka:isAdmin', '1');
+      window.dispatchEvent(new Event('shaka-admin-changed'));
+      toast({title:'Connexion réussie',description:'Bienvenue, Administrateur.'});
       setPassword('');
       setIsOpen(false);
-    } else {
-      toast({
-        variant: 'destructive',
-        title: 'Mot de passe incorrect',
-        description: 'Veuillez réessayer.',
-      });
+    } catch (error) {
+      toast({variant:'destructive',title:'Connexion impossible',description:error instanceof Error ? error.message : 'Réessayez.'});
       setPassword('');
-    }
+    } finally { setLoading(false); }
   };
 
   const keypadButtons = [
@@ -113,7 +107,7 @@ export function KeypadLoginDialog() {
               Annuler
             </Button>
           </DialogClose>
-          <Button type="button" onClick={handleLogin}>
+          <Button type="button" onClick={handleLogin} disabled={loading}>
             Entrer
           </Button>
         </DialogFooter>

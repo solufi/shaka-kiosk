@@ -6,9 +6,9 @@ class Response {
 }
 function loader(root, env, stubs = {}, globals = {}) {
   const cache = new Map();
-  const ctx = vm.createContext({ console, process: { env, pid: process.pid, cwd: () => root }, Buffer, crypto, URL, Headers, Uint8Array, TextEncoder, AbortController, AbortSignal, Date, setTimeout, clearTimeout, ...globals });
+  const ctx = vm.createContext({ console, process: { env, pid: process.pid, cwd: () => root }, Buffer, crypto, URL, Headers, Uint8Array, TextEncoder, AbortController, AbortSignal, Date, setTimeout, clearTimeout, setInterval, clearInterval, ...globals });
   function load(file) {
-    file = path.resolve(file); if (!path.extname(file)) file += '.ts';
+    file = path.resolve(file); if (!path.extname(file)) file += fs.existsSync(file + '.tsx') ? '.tsx' : '.ts';
     if (cache.has(file)) return cache.get(file).exports;
     const module = { exports: {} }; cache.set(file, module);
     function req(name) {
@@ -18,7 +18,7 @@ function loader(root, env, stubs = {}, globals = {}) {
       if (name.startsWith('@/')) return load(path.join(root, 'src', name.slice(2)));
       return require(name);
     }
-    const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
+    const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true, jsx: ts.JsxEmit.ReactJSX } }).outputText;
     vm.runInContext('(function(require,module,exports){' + code + '\n})', ctx, { filename: file })(req, module, module.exports);
     return module.exports;
   }

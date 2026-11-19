@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Card,
   CardContent,
@@ -97,6 +97,8 @@ export function DashboardClient() {
   const [freeVendSeq, setFreeVendSeq] = useState('');
 
   // Relay test states
+  const relayTestCommand = useRef<string | null>(null);
+  const relayTestInFlight = useRef(false);
   const [relayTestLoading, setRelayTestLoading] = useState(false);
   const [relayTestResult, setRelayTestResult] = useState<FreeVendResult | null>(null);
 
@@ -335,50 +337,26 @@ export function DashboardClient() {
   };
 
   const handleRelayTest = async () => {
+    if (relayTestInFlight.current) return;
+    relayTestInFlight.current = true;
     setRelayTestLoading(true);
     setRelayTestResult(null);
-
+    relayTestCommand.current ||= `admin-relay:${crypto.randomUUID()}`;
     try {
-      const url = getVendApiUrl();
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ location: 'relay-test', machineId: 'admin-relay-test', useRelay: true }),
+      const response = await fetch('/api/admin/relay-test', {
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({commandId:relayTestCommand.current}),
       });
-
-      let data: FreeVendResult | null = null;
-      try {
-        data = (await res.json()) as FreeVendResult;
-      } catch {
-        data = { success: res.ok, message: await res.text() };
-      }
-
-      if (!res.ok) {
-        setRelayTestResult({ ...data, success: false, error: data?.error || data?.message || 'Erreur API' });
-        toast({
-          variant: 'destructive',
-          title: 'Test Relais échoué',
-          description: data?.error || data?.message || 'Erreur API',
-        });
-        return;
-      }
-
-      setRelayTestResult({ ...data, success: data?.success ?? true });
-      toast({
-        title: 'Test Relais réussi',
-        description: data?.message || 'Le relais a été activé avec succès.',
-      });
+      const result = await response.json();
+      if (response.status === 401) window.dispatchEvent(new Event('shaka-admin-login-required'));
+      setRelayTestResult(result);
+      if (!response.ok || result.ok !== true) throw new Error(result.error || 'Résultat du test à vérifier');
+      relayTestCommand.current = null;
+      toast({title:'Test du relais réussi',description:result.message});
     } catch (error) {
-      console.error('Relay test failed:', error);
-      setRelayTestResult({ success: false, error: 'Impossible de joindre le service de distribution.' });
-      toast({
-        variant: 'destructive',
-        title: 'Test Relais échoué',
-        description: 'Impossible de joindre le service de distribution.',
-      });
+      toast({variant:'destructive',title:'Test du relais impossible',description:error instanceof Error ? error.message : 'Vérifiez le résultat avant de réessayer.'});
     } finally {
+      relayTestInFlight.current = false;
       setRelayTestLoading(false);
     }
   };
@@ -654,11 +632,11 @@ export function DashboardClient() {
           {/* Separator */}
           <div className="border-t pt-4">
             <div className="space-y-4">
-              <h4 className="font-medium text-sm">Test Relais GPIO4</h4>
+              <h4 className="font-medium text-sm">Test du relais</h4>
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">
-                    Active le relais pendant 0.7 secondes pour tester l'ouverture.
+                    Déclenche une impulsion selon le profil matériel, sans achat. La machine doit être au repos et la porte fermée.
                   </p>
                 </div>
                 <Button 
@@ -677,7 +655,7 @@ export function DashboardClient() {
                   </AlertTitle>
                   <AlertDescription>
                     <div className="space-y-1">
-                      <div>{relayTestResult.message}</div>
+                      <div>{relayTestResult.message || relayTestResult.error}</div>
                       {relayTestResult.stdout && (
                         <div className="text-xs mt-1">
                           <span className="font-semibold">Output:</span> {relayTestResult.stdout}

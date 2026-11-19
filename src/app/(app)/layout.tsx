@@ -45,6 +45,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   // Démarrer le heartbeat service
   useHeartbeat();
 
+  useEffect(() => {
+    const revealLogin = () => setShowAdminLogin(true);
+    window.addEventListener('shaka-admin-login-required', revealLogin);
+    return () => window.removeEventListener('shaka-admin-login-required', revealLogin);
+  }, []);
+
   // Handle secret admin login button clicks
   const handleSecretAdminClick = () => {
     const newCount = adminClickCount + 1;
@@ -82,6 +88,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   };
 
   const handleLogout = () => {
+    void fetch('/api/admin/session', {method:'DELETE'});
     try {
       window.localStorage.removeItem('shaka:isAdmin');
       // Record logout time so vending-machine can skip screensaver
