@@ -82,3 +82,8 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Touchscreen kiosk: keep the pointer hidden over controls and dialogs too. */
+html, body, body *, body *::before, body *::after {
+  cursor: none !important;
+}
