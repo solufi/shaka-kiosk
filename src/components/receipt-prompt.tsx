@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Mail, X, CheckCircle2, Loader2, Send } from 'lucide-react';
 import { VirtualKeyboard } from './virtual-keyboard';
 
 interface ReceiptPromptProps {
   /** Vend API base URL (e.g. http://127.0.0.1:5001) */
   vendApiBase: string;
+  sessionId: string;
   /** Called when the prompt is dismissed (either skipped or after sending) */
   onDone: () => void;
 }
@@ -17,8 +18,15 @@ function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
-export function ReceiptPrompt({ vendApiBase, onDone }: ReceiptPromptProps) {
+export function ReceiptPrompt({ vendApiBase, sessionId, onDone }: ReceiptPromptProps) {
   const [phase, setPhase] = useState<Phase>('choice');
+  const doneRef = useRef(onDone);
+  doneRef.current = onDone;
+  useEffect(() => {
+    if (phase !== 'sent') return;
+    const timer = setTimeout(() => doneRef.current(), 2500);
+    return () => clearTimeout(timer);
+  }, [phase]);
   const [email, setEmail] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -34,12 +42,12 @@ export function ReceiptPrompt({ vendApiBase, onDone }: ReceiptPromptProps) {
       const res = await fetch(`${vendApiBase}/receipt/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail }),
+        body: JSON.stringify({ email: cleanEmail, sessionId }),
       });
       const data = await res.json();
-      if (data.ok) {
+      if (res.ok && data.ok) {
         setPhase('sent');
-        setTimeout(onDone, 2500);
+
       } else {
         setErrorMsg(data.error || 'Échec de l\'envoi');
         setPhase('error');

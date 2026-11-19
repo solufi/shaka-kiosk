@@ -639,6 +639,7 @@ function RetailCartPanel({
         !receiptDismissed && (
           <ReceiptPrompt
             vendApiBase={getVendApiBase()}
+            sessionId={purchaseIdRef.current}
             onDone={() => setReceiptDismissed(true)}
           />
         )}
