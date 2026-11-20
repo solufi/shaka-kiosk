@@ -67,5 +67,6 @@
   },
   "employeeWithdrawalProtocol": 1,
   "displayProtocol": 2,
+  "corporateFundingProtocol":1,
   "multiSlotProtocol": 1
 }

@@ -41,7 +41,7 @@ export function VendingMachine() {
   const [products, setProducts] = useState<Product[] | null>(null);
   const [productsLoading, setProductsLoading] = useState(true);
   const [employeeConfig,setEmployeeConfig]=useState<any>(null);
-  useEffect(()=>{fetch('/api/machine/employee/config',{cache:'no-store'}).then(r=>r.json()).then(d=>{if(d.ok)setEmployeeConfig(d);}).catch(()=>{});},[]);
+  useEffect(()=>{let active=true;const load=()=>fetch('/api/machine/employee/config',{cache:'no-store'}).then(r=>r.json()).then(d=>{if(active&&d.ok)setEmployeeConfig(d);}).catch(()=>{});void load();const timer=setInterval(load,30000);return()=>{active=false;clearInterval(timer);};},[]);
 
   const loadProducts = async () => {
     // 1) Immediately show localStorage cache (instant display)
@@ -307,7 +307,7 @@ export function VendingMachine() {
               key={product.id}
               product={product}
               compact={compact}
-              employeeMode={!testMode.active&&employeeConfig?.enabled?(employeeConfig.policies?.find((p:any)=>p.productId===product.id)?.mode||'blocked'):undefined}
+              employeeMode={!testMode.active&&employeeConfig?.funding?.enabled?'included':!testMode.active&&employeeConfig?.enabled?(employeeConfig.policies?.find((p:any)=>p.productId===product.id)?.mode||'blocked'):undefined}
               onAddToCart={handleAddToCart}
               onUpdateProduct={handleUpdateProduct}
               onDeleteProduct={handleDeleteProduct}
