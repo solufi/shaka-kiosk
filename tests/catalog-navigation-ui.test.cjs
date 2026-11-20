@@ -1,0 +1,38 @@
+const test=require('node:test'),assert=require('node:assert/strict'),path=require('node:path');
+const React=require('react'),Renderer=require('react-test-renderer'),{loader}=require('./loader.cjs'),root=path.resolve(__dirname,'..');
+const wrapper=tag=>({children,...props})=>React.createElement(tag,props,children);
+const text=node=>typeof node==='number'?String(node):typeof node==='string'?node:Array.isArray(node)?node.map(text).join(''):node?.props?text(node.props.children):'';
+test('the real vending page keeps its basket and canonical values across pages and category changes',async t=>{
+ const products=Array.from({length:18},(_,i)=>({id:'item-'+i,name:'Produit '+i,price:5.49,quantity:4,location:String(30+i),order:i,imageId:'photo',description:''}));
+ const layout={schemaVersion:1,columns:3,rows:2,orderedIds:[],mode:'pages',categoriesEnabled:true,categories:[{id:'drinks',label:'Breuvages',productIds:products.slice(0,4).map(p=>p.id)},{id:'bars',label:'Barres',productIds:products.slice(12).map(p=>p.id)}]};
+ const calls=[],values=new Map(),storage={getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v),removeItem:k=>values.delete(k)};
+ const ProductCard=({product,onAddToCart})=>React.createElement('button',{'data-product':product.id,onClick:()=>onAddToCart(product)},'Ajouter '+product.id);
+ const CartPanel=({cartItems})=>React.createElement('aside',{},JSON.stringify(cartItems));
+ const fetch=async url=>{calls.push(url);if(url.startsWith('/api/local-products'))return {ok:true,json:async()=>({ok:true,data:products})};if(url==='/api/machine/employee/config')return {ok:true,json:async()=>({ok:true,enabled:false})};throw Error('Unexpected request '+url);};
+ const x=loader(root,{}, {'@/components/product-card':{ProductCard},'@/components/cart-panel':{CartPanel},'@/components/door-alert':{DoorAlert:()=>null,useDoorAlert:()=>({doorAlert:{isOpen:false},showDoorAlert(){},hideDoorAlert(){}})},'@/hooks/use-toast':{useToast:()=>({toast(){}})},'@/hooks/use-idle':{useIdle(){}},'@/hooks/use-display-layout':{useDisplayLayout:()=>layout},'./screensaver':{Screensaver:({onInteraction})=>React.createElement('button',{onClick:onInteraction},'Commencer')},'./test-mode':{useTestMode:()=>({active:false})},'./ui/skeleton':{Skeleton:()=>null},'./ui/button':{Button:wrapper('button')},'./ui/card':Object.fromEntries(['Card','CardContent','CardFooter'].map(n=>[n,wrapper('div')]))},{fetch,window:{localStorage:storage,sessionStorage:storage,addEventListener(){},removeEventListener(){}},sessionStorage:storage,document:{visibilityState:'visible',addEventListener(){},removeEventListener(){},querySelector:()=>null}});
+ const {VendingMachine}=x.load('src/components/vending-machine.tsx');let tree;
+ await Renderer.act(async()=>{tree=Renderer.create(React.createElement(VendingMachine));});t.after(()=>Renderer.act(()=>tree.unmount()));
+ const button=label=>tree.root.findAllByType('button').find(n=>text(n).includes(label));
+ await Renderer.act(async()=>button('Commencer').props.onClick());
+ assert.equal(tree.root.findAllByType(ProductCard).length,6);
+ await Renderer.act(async()=>button('Ajouter item-0').props.onClick());
+ const before=JSON.stringify(tree.root.findByType(CartPanel).props.cartItems);
+ await Renderer.act(async()=>button('Suivant →').props.onClick());assert.equal(tree.root.findAllByType(ProductCard)[0].props.product.id,'item-6');
+ assert.equal(JSON.stringify(tree.root.findByType(CartPanel).props.cartItems),before);
+ await Renderer.act(async()=>button('Breuvages').props.onClick());assert.equal(tree.root.findAllByType(ProductCard).length,4);assert.match(text(tree.root.findByProps({'aria-live':'polite'})),/Page 1 sur 1/);
+ await Renderer.act(async()=>button('Barres').props.onClick());assert.equal(tree.root.findAllByType(ProductCard)[0].props.product.id,'item-12');
+ assert.equal(JSON.stringify(tree.root.findByType(CartPanel).props.cartItems),before);assert.equal(tree.root.findByType(CartPanel).props.cartItems[0].price,5.49);
+ assert.ok(calls.every(url=>url.startsWith('/api/local-products')||url==='/api/machine/employee/config'));
+});
+
+test('all custom categories remain reachable and All stays visible when category buttons span pages',async t=>{
+ const products=Array.from({length:20},(_,i)=>({id:'p'+i,name:'Produit '+i,price:2,quantity:3}));
+ const layout={schemaVersion:2,columns:3,rows:2,orderedIds:[],mode:'pages',categoriesEnabled:true,categories:products.map((p,i)=>({id:'g'+i,label:'Catégorie '+(i+1),productIds:[p.id]}))};
+ const x=loader(root,{}, {'./ui/button':{Button:wrapper('button')}});const {ProductBrowser}=x.load('src/components/product-browser.tsx');let tree;
+ await Renderer.act(async()=>{tree=Renderer.create(React.createElement(ProductBrowser,{products,layout,renderProduct:p=>React.createElement('article',{key:p.id},p.id)}));});t.after(()=>Renderer.act(()=>tree.unmount()));
+ assert.ok(tree.root.findAllByType('button').some(n=>text(n).startsWith('Tous')));
+ for(let i=0;i<3;i++)await Renderer.act(async()=>tree.root.findByProps({'aria-label':'Catégories suivantes'}).props.onClick());
+ const last=tree.root.findAllByType('button').find(n=>n.props.title==='Catégorie 20');assert.ok(last);
+ await Renderer.act(async()=>last.props.onClick());assert.equal(tree.root.findAllByType('article').length,1);assert.equal(text(tree.root.findByType('article')),'p19');
+ await Renderer.act(async()=>tree.root.findAllByType('button').find(n=>text(n).startsWith('Tous')).props.onClick());assert.equal(tree.root.findAllByType('article').length,6);
+});

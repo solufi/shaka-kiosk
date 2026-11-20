@@ -50,6 +50,7 @@ interface PlaceholderImage {
 
 interface ProductCardProps {
   product: Product;
+  compact?: boolean;
   employeeMode?: "included" | "paid" | "blocked";
   placeholderImages?: PlaceholderImage[];
   onAddToCart: (product: Product) => void;
@@ -74,7 +75,7 @@ const formSchema = z.object({
 });
 
 
-export function ProductCard({ product, employeeMode, placeholderImages, onAddToCart, onUpdateProduct, onDeleteProduct, onMove, isFirst, isLast }: ProductCardProps) {
+export function ProductCard({ product, compact=false, employeeMode, placeholderImages, onAddToCart, onUpdateProduct, onDeleteProduct, onMove, isFirst, isLast }: ProductCardProps) {
   const details = productDetails(product.description);
   const [detailTab,setDetailTab] = useState<'nutrition'|'description'>('nutrition');
   const [descriptionPage,setDescriptionPage] = useState(0);
@@ -131,18 +132,18 @@ export function ProductCard({ product, employeeMode, placeholderImages, onAddToC
   return (
     <>
       <Dialog open={isDetailViewOpen} onOpenChange={setIsDetailViewOpen}>
-        <Card className="flex flex-col overflow-hidden transition-all hover:shadow-lg">
+        <Card className={`flex flex-col overflow-hidden transition-all hover:shadow-lg ${compact?'catalog-product-card':''}`}>
           <DialogTrigger asChild>
-            <div className="cursor-pointer">
-              <CardHeader className="p-0">
-                <div className="relative aspect-square w-full">
+            <div className="catalog-product-trigger cursor-pointer">
+              <CardHeader className="catalog-product-header p-0">
+                <div className="catalog-product-image relative aspect-square w-full">
                   <ProductPhoto imageId={product.imageId} name={product.name} className="object-contain p-2" />
                   {isSoldOut && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/50">
                       <Badge variant="destructive" className="text-lg">{product.stockUnavailable ? "À VÉRIFIER" : "ÉPUISÉ"}</Badge>
                     </div>
                   )}
-                  {isAdmin && (
+                  {isAdmin && !compact && (
                     <div className="absolute top-2 right-2 flex flex-col gap-2">
                        <Button
                         size="icon"
@@ -183,7 +184,7 @@ export function ProductCard({ product, employeeMode, placeholderImages, onAddToC
                       </AlertDialog>
                     </div>
                   )}
-                   {isAdmin && (
+                   {isAdmin && !compact && (
                     <div className="absolute bottom-2 right-2 flex flex-col gap-1">
                       <Button
                         size="icon"
@@ -213,14 +214,14 @@ export function ProductCard({ product, employeeMode, placeholderImages, onAddToC
                   )}
                 </div>
               </CardHeader>
-              <CardContent className="flex-1 p-4">
-                <CardTitle className="text-lg font-bold">{product.name}</CardTitle>
-                <p className="mt-2 text-2xl font-headline font-bold text-primary">{priceLabel}</p>
+              <CardContent className="catalog-product-info flex-1 p-4">
+                <CardTitle className="catalog-product-name text-lg font-bold">{product.name}</CardTitle>
+                <div className="catalog-product-price-row"><p className="mt-2 text-2xl font-headline font-bold text-primary">{priceLabel}</p>{compact&&<span className="text-xs text-muted-foreground" aria-label={`Stock de ${product.name} : ${stockLabel}`}>{isSoldOut?stockLabel:`${product.quantity} disp.`}</span>}</div>
               </CardContent>
             </div>
           </DialogTrigger>
-          <CardFooter className="flex-wrap gap-2 p-4 pt-0">
-            <Badge variant={isSoldOut ? "destructive" : "outline"} className="shrink-0 whitespace-nowrap py-2" aria-label={`Stock de ${product.name} : ${product.stockUnavailable ? "indisponible" : Math.max(0, product.quantity)}`}>
+          <CardFooter className="catalog-product-footer flex-wrap gap-2 p-4 pt-0">
+            <Badge variant={isSoldOut ? "destructive" : "outline"} className={`${compact?'hidden':''} shrink-0 whitespace-nowrap py-2`} aria-label={`Stock de ${product.name} : ${product.stockUnavailable ? "indisponible" : Math.max(0, product.quantity)}`}>
               {stockLabel}
             </Badge>
             <Button
@@ -230,7 +231,7 @@ export function ProductCard({ product, employeeMode, placeholderImages, onAddToC
               aria-label={`Ajouter ${product.name} au panier`}
             >
               <PlusCircle className="mr-2 h-5 w-5" />
-              Ajouter au panier
+              {compact?'Ajouter':'Ajouter au panier'}
             </Button>
           </CardFooter>
         </Card>
