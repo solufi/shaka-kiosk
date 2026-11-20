@@ -39,7 +39,7 @@ test('zero-price fridge checkout retains its purchase identity through closing a
  }));});
  t.after(()=>Renderer.act(()=>tree.unmount()));
  const button=label=>tree.root.findAllByType('button').find(n=>text(n).includes(label));
- await Renderer.act(async()=>{await button('Passer au paiement').props.onClick();});
+ await Renderer.act(async()=>{await button('Valider la commande gratuite').props.onClick();});
  const deadline=Date.now()+6000;
  while(!tree.root.findAllByType(ReceiptPrompt).length && Date.now()<deadline){await Renderer.act(async()=>{await delay(100);});}
  assert.equal(tree.root.findAllByType(ReceiptPrompt).length,1,'Receipt offered after a confirmed door cycle');

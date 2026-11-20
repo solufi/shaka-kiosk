@@ -87,3 +87,24 @@
 html, body, body *, body *::before, body *::after {
   cursor: none !important;
 }
+
+/* Product information fits the touchscreen; long descriptions use pages. */
+.product-detail-dialog { width:min(1120px,94vw); max-width:none; max-height:90dvh; padding:clamp(18px,2.5vh,32px); gap:clamp(12px,2vh,24px); border-radius:24px; }
+.product-detail-heading { padding-right:32px; }
+.product-detail-title { font-size:clamp(20px,2.5vw,32px); line-height:1.15; margin-top:6px; }
+.product-detail-body { display:grid; grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr); gap:clamp(20px,3vw,40px); min-height:0; }
+.product-detail-visual { display:flex; min-width:0; flex-direction:column; gap:14px; }
+.product-detail-photo { position:relative; height:clamp(140px,35dvh,370px); overflow:hidden; border:1px solid #e2e8f0; border-radius:18px; background:white; }
+.product-detail-price { font-size:clamp(22px,2.5vw,32px); line-height:1.2; font-weight:700; }
+.product-detail-information { display:flex; min-width:0; flex-direction:column; gap:18px; }
+.product-detail-tab { border-radius:12px; padding:10px 14px; font-size:14px; font-weight:600; background:#f1f5f9; color:#475569; }
+.product-detail-tab.is-active { background:hsl(var(--primary)); color:hsl(var(--primary-foreground)); }
+.product-detail-facts { display:flex; flex-direction:column; gap:18px; }
+.product-detail-nutrition { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.product-detail-allergens { display:flex; flex-direction:column; gap:6px; border:1px solid #f3d38b; border-radius:14px; padding:14px 16px; font-size:14px; line-height:1.4; background:#fffbeb; color:#713f12; }
+.product-detail-description { font-size:clamp(14px,1.5vw,18px); line-height:1.55; overflow-wrap:anywhere; }
+.product-detail-actions { display:flex; flex-direction:row; justify-content:flex-end; gap:12px; }
+.product-detail-actions button { min-width:140px; }
+@media (max-height:700px) { .product-detail-dialog { gap:12px; padding:18px 22px; } .product-detail-title { font-size:22px; } .product-detail-information,.product-detail-facts { gap:12px; } .product-detail-nutrition>div { padding:8px 12px; } .product-detail-allergens { padding:10px 12px; font-size:13px; } .product-detail-photo { height:30dvh; } }
+@media (max-width:639px) { .product-detail-body { grid-template-columns:1fr; gap:14px; } .product-detail-photo { height:18dvh; } .product-detail-visual { gap:8px; } .product-detail-information,.product-detail-facts { gap:10px; } .product-detail-nutrition { grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; } .product-detail-nutrition>div { padding:7px; } .product-detail-nutrition strong { font-size:16px; } .product-detail-nutrition span { font-size:10px; } .product-detail-actions button { min-width:0; flex:1; } }
+@media (max-height:540px) and (min-width:640px) { .product-detail-nutrition { grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; } .product-detail-nutrition>div { padding:7px; } .product-detail-nutrition strong { font-size:17px; } .product-detail-nutrition span { font-size:10px; } }

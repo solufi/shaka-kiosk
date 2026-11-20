@@ -8,6 +8,7 @@ interface ReceiptPromptProps {
   /** Vend API base URL (e.g. http://127.0.0.1:5001) */
   vendApiBase: string;
   sessionId: string;
+  simulation?: boolean;
   /** Called when the prompt is dismissed (either skipped or after sending) */
   onDone: () => void;
 }
@@ -18,7 +19,7 @@ function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
-export function ReceiptPrompt({ vendApiBase, sessionId, onDone }: ReceiptPromptProps) {
+export function ReceiptPrompt({ vendApiBase, sessionId, simulation = false, onDone }: ReceiptPromptProps) {
   const [phase, setPhase] = useState<Phase>('choice');
   const doneRef = useRef(onDone);
   doneRef.current = onDone;
@@ -39,10 +40,10 @@ export function ReceiptPrompt({ vendApiBase, sessionId, onDone }: ReceiptPromptP
     setErrorMsg(null);
     setPhase('sending');
     try {
-      const res = await fetch(`${vendApiBase}/receipt/send`, {
+      const res = await fetch(simulation ? '/api/admin/simulate-checkout' : `${vendApiBase}/receipt/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail, sessionId }),
+        body: JSON.stringify({ email: cleanEmail, sessionId, ...(simulation ? {action: 'email'} : {}) }),
       });
       const data = await res.json();
       if (res.ok && data.ok) {
@@ -61,6 +62,7 @@ export function ReceiptPrompt({ vendApiBase, sessionId, onDone }: ReceiptPromptP
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4">
       <div className="w-full max-w-2xl rounded-3xl bg-slate-900 p-8 shadow-2xl">
+        {simulation && <p className="mb-4 text-center font-bold text-amber-300">Reçu de test — aucune vente réelle</p>}
         {phase === 'choice' && (
           <div className="flex flex-col items-center gap-6 text-white">
             <Mail className="h-20 w-20 text-blue-400" />
