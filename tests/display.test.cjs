@@ -22,3 +22,12 @@ test('Fleet and kiosk use the same presentation rules',()=>{
  const {arrangeProducts}=loader(root,{}).load('src/lib/display-layout.ts');
  assert.deepEqual(Array.from(arrangeProducts([{id:'a',location:'10',quantity:7},{id:'b',location:'20'},{id:'c',visible:false}],{schemaVersion:1,columns:2,orderedIds:['b','a']}),p=>p.id),['b','a']);
 });
+
+test('navigation publications retain schema 2 and categories across the durable local route',async()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'kiosk-nav-display-'));try{
+ const route=loader(root,{SHAKA_DISPLAY_DIR:dir,AGENT_TOKEN:'secret'}).load('src/app/api/local-display/route.ts');
+ const publication={revision:'11111111-1111-4111-8111-111111111111',publishedAt:new Date().toISOString(),config:{schemaVersion:2,columns:3,orderedIds:[],mode:'pages',rows:2,categoriesEnabled:true,categories:[{id:'drinks',label:'Breuvages',productIds:['a']}]}};
+ const r=await route.POST({headers:new Headers({'x-agent-token':'secret'}),text:async()=>JSON.stringify(publication)});assert.equal(r.status,200);
+ const stored=(await route.GET()).body.published;assert.equal(stored.config.schemaVersion,2);assert.equal(stored.config.categories[0].label,'Breuvages');assert.equal(stored.config.mode,'pages');
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
