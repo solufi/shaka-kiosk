@@ -24,3 +24,15 @@ test('the real vending page keeps its basket and canonical values across pages a
  assert.equal(JSON.stringify(tree.root.findByType(CartPanel).props.cartItems),before);assert.equal(tree.root.findByType(CartPanel).props.cartItems[0].price,5.49);
  assert.ok(calls.every(url=>url.startsWith('/api/local-products')||url==='/api/machine/employee/config'));
 });
+
+test('all custom categories remain reachable and All stays visible when category buttons span pages',async t=>{
+ const products=Array.from({length:20},(_,i)=>({id:'p'+i,name:'Produit '+i,price:2,quantity:3}));
+ const layout={schemaVersion:2,columns:3,rows:2,orderedIds:[],mode:'pages',categoriesEnabled:true,categories:products.map((p,i)=>({id:'g'+i,label:'Catégorie '+(i+1),productIds:[p.id]}))};
+ const x=loader(root,{}, {'./ui/button':{Button:wrapper('button')}});const {ProductBrowser}=x.load('src/components/product-browser.tsx');let tree;
+ await Renderer.act(async()=>{tree=Renderer.create(React.createElement(ProductBrowser,{products,layout,renderProduct:p=>React.createElement('article',{key:p.id},p.id)}));});t.after(()=>Renderer.act(()=>tree.unmount()));
+ assert.ok(tree.root.findAllByType('button').some(n=>text(n).startsWith('Tous')));
+ for(let i=0;i<3;i++)await Renderer.act(async()=>tree.root.findByProps({'aria-label':'Catégories suivantes'}).props.onClick());
+ const last=tree.root.findAllByType('button').find(n=>n.props.title==='Catégorie 20');assert.ok(last);
+ await Renderer.act(async()=>last.props.onClick());assert.equal(tree.root.findAllByType('article').length,1);assert.equal(text(tree.root.findByType('article')),'p19');
+ await Renderer.act(async()=>tree.root.findAllByType('button').find(n=>text(n).startsWith('Tous')).props.onClick());assert.equal(tree.root.findAllByType('article').length,6);
+});
