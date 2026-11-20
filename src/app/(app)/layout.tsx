@@ -1,5 +1,6 @@
 'use client';
 import type { ReactNode } from 'react';
+import { TestModeProvider, TestModeButton } from '@/components/test-mode';
 import { useState, useEffect } from 'react';
 import { flushRedemptions } from '@/lib/corporate-queue';
 import Link from 'next/link';
@@ -28,7 +29,9 @@ const navItems = [
   { href: '/dashboard', label: 'Tableau de bord', icon: BarChart2 },
 ];
 
-export default function AppLayout({ children }: { children: ReactNode }) {
+export default function AppLayout({children}:{children:ReactNode}) { return <TestModeProvider><AppLayoutContent>{children}</AppLayoutContent></TestModeProvider>; }
+
+function AppLayoutContent({ children }: { children: ReactNode }) {
   useEffect(() => {
     void flushRedemptions();
     const timer = setInterval(() => void flushRedemptions(), 60000);
@@ -217,6 +220,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter>
+          <TestModeButton />
           {isLocalAdmin ? (
             <SidebarMenu>
               <SidebarMenuItem>

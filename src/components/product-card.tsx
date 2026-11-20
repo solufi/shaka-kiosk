@@ -1,4 +1,5 @@
-import Image from 'next/image';
+import { ProductPhoto } from './product-photo';
+import { productDetails } from '@/lib/product-details';
 import type { Product } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -74,10 +75,9 @@ const formSchema = z.object({
 
 
 export function ProductCard({ product, employeeMode, placeholderImages, onAddToCart, onUpdateProduct, onDeleteProduct, onMove, isFirst, isLast }: ProductCardProps) {
-  const placeholder = (placeholderImages || []).find((p) => p.id === product.imageId);
-  const fallbackExts = ['.webp', '.png', '.jpg'];
-  const [extIdx, setExtIdx] = useState(0);
-  const imageUrl = placeholder ? placeholder.imageUrl : `/images/products/${product.imageId}${fallbackExts[extIdx] || '.webp'}`;
+  const details = productDetails(product.description);
+  const [detailTab,setDetailTab] = useState<'nutrition'|'description'>('nutrition');
+  const [descriptionPage,setDescriptionPage] = useState(0);
   const isSoldOut = product.quantity <= 0;
   const stockLabel = product.stockUnavailable ? 'Stock à vérifier' : isSoldOut ? 'Épuisé' : `${product.quantity} ${product.quantity === 1 ? 'restant' : 'restants'}`;
   const priceLabel=employeeMode==='included'?'Fourni par l’entreprise':employeeMode==='blocked'?'Non autorisé':new Intl.NumberFormat('fr-CA',{style:'currency',currency:'CAD'}).format(product.price);
@@ -136,14 +136,7 @@ export function ProductCard({ product, employeeMode, placeholderImages, onAddToC
             <div className="cursor-pointer">
               <CardHeader className="p-0">
                 <div className="relative aspect-square w-full">
-                  <Image
-                      src={imageUrl}
-                      alt={product.name}
-                      data-ai-hint={placeholder?.imageHint || "product"}
-                      fill
-                      className="object-contain p-2"
-                      onError={() => { if (!placeholder && extIdx < fallbackExts.length - 1) setExtIdx(extIdx + 1); }}
-                    />
+                  <ProductPhoto imageId={product.imageId} name={product.name} className="object-contain p-2" />
                   {isSoldOut && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/50">
                       <Badge variant="destructive" className="text-lg">{product.stockUnavailable ? "À VÉRIFIER" : "ÉPUISÉ"}</Badge>
@@ -242,62 +235,43 @@ export function ProductCard({ product, employeeMode, placeholderImages, onAddToC
           </CardFooter>
         </Card>
 
-        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-[425px]">
-          <DialogHeader>
-            <div className="relative aspect-video w-full overflow-hidden rounded-lg">
-              <Image
-                  src={imageUrl}
-                  alt={product.name}
-                  data-ai-hint={placeholder?.imageHint || "product"}
-                  fill
-                  className="object-contain"
-                  onError={() => { if (!placeholder && extIdx < fallbackExts.length - 1) setExtIdx(extIdx + 1); }}
-                />
-            </div>
-            <DialogTitle className="text-2xl mt-4">{product.name}</DialogTitle>
+        <DialogContent className="product-detail-dialog" aria-describedby={undefined}>
+          <DialogHeader className="product-detail-heading">
+            <p className="text-xs font-semibold uppercase tracking-[.18em] text-primary">Découvrir le produit</p>
+            <DialogTitle className="product-detail-title">{product.name}</DialogTitle>
           </DialogHeader>
-          <div className="py-4 space-y-4">
-            <p className="text-muted-foreground">{product.description}</p>
-            
-            {product.nutrition && (
-              <div>
-                <Separator className="my-4" />
-                <h3 className="text-lg font-semibold mb-2">Informations Nutritionnelles</h3>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                  <p>Calories:</p><p className="text-right font-medium">{product.nutrition.calories}</p>
-                  <p>Matières grasses:</p><p className="text-right font-medium">{product.nutrition.fat}</p>
-                  <p>Sucre:</p><p className="text-right font-medium">{product.nutrition.sugar}</p>
-                  <p>Protéines:</p><p className="text-right font-medium">{product.nutrition.protein}</p>
-                </div>
+          <div className="product-detail-body">
+            <div className="product-detail-visual">
+              <div className="product-detail-photo"><ProductPhoto imageId={product.imageId} name={product.name} className="object-contain p-5" sizes="(max-width: 640px) 70vw, 40vw" /></div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="product-detail-price text-primary">{priceLabel}</span>
+                <Badge variant={isSoldOut?'destructive':'outline'}>{stockLabel}</Badge>
               </div>
-            )}
-
-            <Separator className="my-4" />
-
-            <div className="flex items-baseline justify-between">
-              <p className="text-3xl font-bold text-primary">{priceLabel}</p>
+            </div>
+            <div className="product-detail-information">
+              <div className="flex gap-2" role="tablist" aria-label="Informations produit">
+                <button type="button" role="tab" aria-selected={detailTab==='nutrition'} className={`product-detail-tab ${detailTab==='nutrition'?'is-active':''}`} onClick={()=>setDetailTab('nutrition')}>Nutrition et allergènes</button>
+                <button type="button" role="tab" aria-selected={detailTab==='description'} className={`product-detail-tab ${detailTab==='description'?'is-active':''}`} onClick={()=>setDetailTab('description')}>À propos</button>
+              </div>
+              {detailTab==='nutrition'?<div role="tabpanel" aria-label="Nutrition et allergènes" className="product-detail-facts">
+                {product.nutrition?<div className="product-detail-nutrition">
+                  {[["Calories",product.nutrition.calories],["Protéines",product.nutrition.protein],["Matières grasses",product.nutrition.fat],["Sucres",product.nutrition.sugar]].map(([label,value])=><div key={label} className="rounded-xl border bg-slate-50 px-4 py-3"><span className="block text-xs text-muted-foreground">{label}</span><strong className="block text-xl">{value}</strong></div>)}
+                </div>:<p className="text-muted-foreground">Valeurs nutritives non renseignées.</p>}
+                <div className="product-detail-allergens">
+                  <h3 className="font-semibold">Allergènes</h3>
+                  {details.contains && <p><strong>Contient : </strong>{details.contains}</p>}
+                  {details.mayContain && <p><strong>Peut contenir : </strong>{details.mayContain}</p>}
+                  {!details.contains && !details.mayContain && <p className="text-muted-foreground">Information non renseignée. Consultez l’emballage.</p>}
+                </div>
+              </div>:<div role="tabpanel" aria-label="À propos" className="flex min-h-0 flex-col gap-3">
+                <p className="product-detail-description">{details.pages[descriptionPage] || 'Description non renseignée.'}</p>
+                {details.pages.length>1 && <div className="flex items-center gap-3"><Button variant="outline" size="sm" disabled={descriptionPage===0} onClick={()=>setDescriptionPage(p=>p-1)}>Précédent</Button><span className="text-sm">{descriptionPage+1} / {details.pages.length}</span><Button variant="outline" size="sm" disabled={descriptionPage===details.pages.length-1} onClick={()=>setDescriptionPage(p=>p+1)}>Suivant</Button></div>}
+              </div>}
             </div>
           </div>
-          <DialogFooter className="flex-col gap-3 sm:flex-col sm:space-x-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={isSoldOut ? "destructive" : "outline"} className="shrink-0 whitespace-nowrap py-2" aria-label={`Stock de ${product.name} : ${product.stockUnavailable ? "indisponible" : Math.max(0, product.quantity)}`}>
-                {stockLabel}
-              </Badge>
-              <DialogClose asChild>
-                <Button
-                    className="flex-1"
-                    onClick={() => onAddToCart(product)}
-                    disabled={isSoldOut || employeeMode==='blocked'}
-                    aria-label={`Ajouter ${product.name} au panier`}
-                >
-                    <PlusCircle className="mr-2 h-5 w-5" />
-                    Ajouter au panier
-                </Button>
-              </DialogClose>
-            </div>
-            <DialogClose asChild>
-              <Button variant="outline">Fermer</Button>
-            </DialogClose>
+          <DialogFooter className="product-detail-actions">
+            <DialogClose asChild><Button variant="outline" size="lg">Fermer</Button></DialogClose>
+            <DialogClose asChild><Button size="lg" onClick={()=>onAddToCart(product)} disabled={isSoldOut || employeeMode==='blocked'} aria-label={`Ajouter ${product.name} au panier`}><PlusCircle className="mr-2 h-5 w-5"/>Ajouter au panier</Button></DialogClose>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState,useEffect } from 'react';
 import Image from 'next/image';
 import {
   Select,
@@ -21,7 +21,9 @@ interface ImageSelectorProps {
 
 export function ImageSelector({ value, onChange }: ImageSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const selectedImage = PlaceHolderImages.find(img => img.id === value);
+  const [images,setImages]=useState(PlaceHolderImages);
+  useEffect(()=>{let mounted=true;fetch('/api/placeholder-images',{cache:'no-store'}).then(r=>r.json()).then(data=>{if(mounted&&Array.isArray(data))setImages(data);}).catch(()=>{});return()=>{mounted=false;};},[]);
+  const selectedImage = images.find(img => img.id === value);
 
   return (
      <Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -34,7 +36,7 @@ export function ImageSelector({ value, onChange }: ImageSelectorProps) {
             {selectedImage ? (
                 <>
                     <div className="relative h-12 w-12 flex-shrink-0">
-                        <Image
+                        <Image unoptimized
                         src={selectedImage.imageUrl}
                         alt={selectedImage.description}
                         fill
@@ -51,7 +53,7 @@ export function ImageSelector({ value, onChange }: ImageSelectorProps) {
       </PopoverTrigger>
       <PopoverContent className="p-0 w-auto" align="start">
          <div className="grid grid-cols-3 gap-2 p-2 max-h-96 overflow-y-auto">
-            {PlaceHolderImages.map((image) => (
+            {images.map((image) => (
                 <button
                     key={image.id}
                     type="button"
@@ -64,7 +66,7 @@ export function ImageSelector({ value, onChange }: ImageSelectorProps) {
                         setIsOpen(false);
                     }}
                 >
-                    <Image
+                    <Image unoptimized
                         src={image.imageUrl}
                         alt={image.description}
                         fill

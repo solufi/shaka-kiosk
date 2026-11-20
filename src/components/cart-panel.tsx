@@ -1,6 +1,8 @@
 'use client';
 import { settlePayment } from '@/lib/payment-settlement';
-import Image from 'next/image';
+import { ProductPhoto } from './product-photo';
+import { useTestMode } from './test-mode';
+import { SimulatedCheckout } from './simulated-checkout';
 import {EmployeeCartPanel} from './employee-cart-panel';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { CartItem, Product } from '@/lib/types';
@@ -73,6 +75,8 @@ function RetailCartPanel({
   onClearCart,
   onPurchase,
 }: CartPanelProps) {
+  const testMode = useTestMode();
+  const [testCart,setTestCart] = useState<CartItem[] | null>(null);
   const subtotal = cartItems.reduce(
     (acc, item) => acc + item.price * item.orderQuantity,
     0
@@ -81,7 +85,7 @@ function RetailCartPanel({
   const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null);
 
   // Compute discount in dollars (subtotal is in dollars)
-  const discount = appliedPromo
+  const discount = !testMode.active && appliedPromo
     ? appliedPromo.kind === 'corporate'
       ? cartItems.reduce((sum, item) => sum + Math.round(item.price * appliedPromo.discountValue) * item.orderQuantity, 0) / 100
       : appliedPromo.discountType === 'percent'
@@ -143,6 +147,7 @@ function RetailCartPanel({
   }, []);
 
   const handlePaymentFailed = useCallback(async () => {
+    if (freeVendRef.current) {resetPayment();return;}
     try {
       const response = await fetch(`${getVendApiBase()}/stripe/reset`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:purchaseIdRef.current})});
       const result = await response.json();
@@ -212,7 +217,7 @@ function RetailCartPanel({
             if (!result.ok || result.dropDetected !== true) {
               allDropsOk = false;
               if (result.dropDetected === false) {
-                vendError = `Produit non détecté: ${item.name}. Le paiement sera vérifié.`;
+                vendError = freeVendRef.current?`Produit non détecté : ${item.name}. Aucun paiement effectué.`:`Produit non détecté : ${item.name}. Le paiement sera vérifié.`;
               } else {
                 vendError = `Erreur distributeur: ${item.name}`;
               }
@@ -291,7 +296,7 @@ function RetailCartPanel({
       onPurchase();
       setPaymentState('success_normal');
     } else {
-      setPaymentError(vendError || 'Le produit n\'a pas été distribué. Le paiement sera vérifié.');
+      setPaymentError(vendError || (freeVendRef.current?'Le produit gratuit n’a pas été distribué. Aucun paiement effectué.':'Le produit n’a pas été distribué. Le paiement sera vérifié.'));
       setPaymentState('vend_failed');
     }
   }, [onPurchase, cartItems, appliedPromo, subtotal]);
@@ -312,6 +317,8 @@ function RetailCartPanel({
   }, []);
 
   const startPayment = async () => {
+    if (testMode.active) {setTestCart([...cartItems]);return;}
+    freeVendRef.current = total <= 0;
     setPaymentState('starting');
     setPaymentError(null);
     setCountdown(PAYMENT_TIMEOUT_SECONDS);
@@ -344,7 +351,8 @@ function RetailCartPanel({
         if(!response.ok || !grant.ok)throw new Error(grant.error || 'Autorisation refusée');
         purchaseIdRef.current=grant.sessionId;
       } catch(error) {
-        setPaymentError(error instanceof Error?error.message:'Autorisation indisponible');setPaymentState('denied');return;
+        const message=error instanceof Error?error.message:'Autorisation indisponible';
+        setPaymentError(/commissioning|fleet.*approval/i.test(message)?'Cette machine est encore en configuration. Utilisez les essais sans matériel dans le menu Admin.':message);setPaymentState('denied');return;
       }
       freeVendRef.current = true;
       setPaymentState('approved');
@@ -530,12 +538,13 @@ function RetailCartPanel({
 
   return (
     <>
+      {testCart && <SimulatedCheckout items={testCart} onDone={()=>{setTestCart(null);onClearCart();resetPayment();}}/>}
       {paymentState === 'starting' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
           <div className="flex flex-col items-center gap-6 text-white">
             <Loader2 className="h-24 w-24 animate-spin" />
             <p className="text-3xl font-bold">
-              Initialisation du paiement...
+              {freeVendRef.current?'Vérification de la commande gratuite…':'Initialisation du paiement…'}
             </p>
           </div>
         </div>
@@ -658,7 +667,7 @@ function RetailCartPanel({
             )}
             <div className="mt-4 rounded-2xl bg-green-900/40 px-8 py-4 border border-green-600">
               <p className="text-xl font-semibold text-green-400 text-center">
-                Le statut de votre paiement sera vérifié
+                {freeVendRef.current?'Aucun paiement n’a été effectué.':'Le statut de votre paiement sera vérifié'}
               </p>
             </div>
             <p className="text-lg text-white/60 mt-2">
@@ -681,6 +690,7 @@ function RetailCartPanel({
               <p className="text-lg text-red-300">{paymentError}</p>
             )}
             <p className="text-xl text-white/70">
+              {freeVendRef.current && <span className="block">Aucun paiement n’a été effectué.</span>}
               Retour à l&​apos;accueil...
             </p>
           </div>
@@ -706,15 +716,7 @@ function RetailCartPanel({
                 return (
                   <div key={item.id} className="flex items-center gap-4">
                     <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-md">
-                      {placeholder && (
-                        <Image
-                          src={placeholder.imageUrl}
-                          alt={item.name}
-                          data-ai-hint={placeholder.imageHint}
-                          fill
-                          className="object-contain"
-                        />
-                      )}
+                      <ProductPhoto imageId={item.imageId} name={item.name} className="object-contain" sizes="64px" />
                     </div>
                     <div className="flex-1">
                       <p className="font-semibold">{item.name}</p>
@@ -777,7 +779,7 @@ function RetailCartPanel({
                 applied={appliedPromo}
                 onApply={setAppliedPromo}
                 onRemove={() => setAppliedPromo(null)}
-                disabled={paymentState !== 'idle'}
+                disabled={paymentState !== 'idle' || testMode.active}
               />
               {appliedPromo && (
                 <div className="flex w-full flex-col gap-1 text-sm">
@@ -801,7 +803,7 @@ function RetailCartPanel({
                 onClick={startPayment}
                 disabled={paymentState !== 'idle'}
               >
-                Passer au paiement
+                {testMode.active?'Tester le panier':total<=0?'Valider la commande gratuite':'Passer au paiement'}
               </Button>
               <Button variant="outline" onClick={onClearCart} disabled={paymentState !== 'idle'}>
                 Vider le panier
@@ -815,9 +817,11 @@ function RetailCartPanel({
 }
 
 export function CartPanel(props:CartPanelProps){
+ const testMode=useTestMode();
  const [config,setConfig]=useState<any>(null),[error,setError]=useState('');
  const load=useCallback(async()=>{try{const d=await fetch('/api/machine/employee/config',{cache:'no-store'}).then(r=>r.json());if(!d.ok)throw Error(d.error||'Configuration indisponible');setConfig(d);setError('');}catch(e){setError((e as Error).message);}},[]);
  useEffect(()=>{void load();},[load]);
+ if(testMode.active)return <RetailCartPanel {...props}/>;
  if(!config)return <div className="rounded-xl border p-5"><p>{error||'Chargement de la machine…'}</p>{error&&<button className="mt-4 underline" onClick={()=>void load()}>Réessayer</button>}</div>;
  return config.enabled?<EmployeeCartPanel {...props} config={config}/>:<RetailCartPanel {...props}/>;
 }
