@@ -1,4 +1,5 @@
 import { ProductPhoto } from './product-photo';
+import {productSellingCents,productDepositCents} from '@/lib/cart-pricing';
 import { productDetails } from '@/lib/product-details';
 import type { Product } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -81,7 +82,7 @@ export function ProductCard({ product, compact=false, employeeMode, placeholderI
   const [descriptionPage,setDescriptionPage] = useState(0);
   const isSoldOut = product.quantity <= 0;
   const stockLabel = product.stockUnavailable ? 'Stock à vérifier' : isSoldOut ? 'Épuisé' : `${product.quantity} ${product.quantity === 1 ? 'restant' : 'restants'}`;
-  const priceLabel=employeeMode==='included'?'Fourni par l’entreprise':employeeMode==='blocked'?'Non autorisé':new Intl.NumberFormat('fr-CA',{style:'currency',currency:'CAD'}).format(product.price);
+  const priceLabel=employeeMode==='included'?'Fourni par l’entreprise':employeeMode==='blocked'?'Non autorisé':new Intl.NumberFormat('fr-CA',{style:'currency',currency:'CAD'}).format(productSellingCents(product)/100);
   const [isDetailViewOpen, setIsDetailViewOpen] = useState(false);
   const [isEditViewOpen, setIsEditViewOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -216,7 +217,7 @@ export function ProductCard({ product, compact=false, employeeMode, placeholderI
               </CardHeader>
               <CardContent className="catalog-product-info flex-1 p-4">
                 <CardTitle className="catalog-product-name text-lg font-bold">{product.name}</CardTitle>
-                <div className="catalog-product-price-row"><p className="mt-2 text-2xl font-headline font-bold text-primary">{priceLabel}</p>{compact&&<span className="text-xs text-muted-foreground" aria-label={`Stock de ${product.name} : ${stockLabel}`}>{isSoldOut?stockLabel:`${product.quantity} disp.`}</span>}</div>
+                {productDepositCents(product)>0&&employeeMode!=="included"&&employeeMode!=="blocked"&&<p className="text-[11px] text-muted-foreground">Dont ${(productDepositCents(product)/100).toFixed(2)} de consigne</p>}<div className="catalog-product-price-row"><p className="mt-2 text-2xl font-headline font-bold text-primary">{priceLabel}</p>{compact&&<span className="text-xs text-muted-foreground" aria-label={`Stock de ${product.name} : ${stockLabel}`}>{isSoldOut?stockLabel:`${product.quantity} disp.`}</span>}</div>
               </CardContent>
             </div>
           </DialogTrigger>
@@ -245,7 +246,7 @@ export function ProductCard({ product, compact=false, employeeMode, placeholderI
             <div className="product-detail-visual">
               <div className="product-detail-photo"><ProductPhoto imageId={product.imageId} name={product.name} className="object-contain p-5" sizes="(max-width: 640px) 70vw, 40vw" /></div>
               <div className="flex items-center justify-between gap-3">
-                <span className="product-detail-price text-primary">{priceLabel}</span>
+                <span className="product-detail-price text-primary">{priceLabel}</span>{productDepositCents(product)>0&&employeeMode!=="included"&&employeeMode!=="blocked"&&<p className="text-xs text-muted-foreground">Inclut ${(productDepositCents(product)/100).toFixed(2)} de consigne non taxable</p>}
                 <Badge variant={isSoldOut?'destructive':'outline'}>{stockLabel}</Badge>
               </div>
             </div>

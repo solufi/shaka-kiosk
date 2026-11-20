@@ -1,5 +1,6 @@
 'use client';
 import { settlePayment } from '@/lib/payment-settlement';
+import {cartPricing,productSellingCents,productDepositCents} from '@/lib/cart-pricing';
 import { ProductPhoto } from './product-photo';
 import { useTestMode } from './test-mode';
 import { SimulatedCheckout } from './simulated-checkout';
@@ -82,24 +83,9 @@ function RetailCartPanel({
   const [employeeNumber,setEmployeeNumber]=useState(''),[numberOpen,setNumberOpen]=useState(false);
   const needsNumber=funded&&funding?.identification==='employee-number';
   const [testCart,setTestCart] = useState<CartItem[] | null>(null);
-  const subtotal = cartItems.reduce(
-    (acc, item) => acc + item.price * item.orderQuantity,
-    0
-  );
-
   const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null);
-
-  // Compute discount in dollars (subtotal is in dollars)
-  const discount = funded?subtotal:!testMode.active && appliedPromo
-    ? appliedPromo.kind === 'corporate'
-      ? cartItems.reduce((sum, item) => sum + Math.round(item.price * appliedPromo.discountValue) * item.orderQuantity, 0) / 100
-      : appliedPromo.discountType === 'percent'
-      ? Math.min(subtotal, (subtotal * appliedPromo.discountValue) / 100)
-      : Math.min(subtotal, appliedPromo.discountValue) // Fleet stores fixed discounts in dollars
-    : 0;
-
-  const total = Math.max(0, subtotal - discount);
-  const discountCents = Math.round(discount * 100);
+  const amounts=cartPricing(cartItems,testMode.active?null:appliedPromo,funded);
+  const subtotal=amounts.subtotalCents/100,discount=amounts.discountCents/100,total=amounts.totalCents/100,discountCents=amounts.discountCents;
 
   const [paymentState, setPaymentState] = useState<PaymentState>('idle');
   useEffect(()=>{onBusyChange?.(paymentState!=='idle');return()=>onBusyChange?.(false);},[paymentState,onBusyChange]);
@@ -341,7 +327,7 @@ function RetailCartPanel({
     if (total <= 0) {
       try {
         const response = await fetch(`${getVendApiBase()}/purchase/free`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-          items:cartItems.map(item=>({productId:item.id,price:Math.round(item.price*100),qty:item.orderQuantity})),promoCode:funded?undefined:appliedPromo?.code,...(funded?{corporateFunded:true,employeeNumber:needsNumber?employeeNumber.trim().toUpperCase():undefined}:{})
+          items:cartItems.map(item=>({productId:item.id,price:productSellingCents(item),qty:item.orderQuantity})),promoCode:funded?undefined:appliedPromo?.code,...(funded?{corporateFunded:true,employeeNumber:needsNumber?employeeNumber.trim().toUpperCase():undefined}:{})
         })});
         const grant=await response.json();
         if(!response.ok || !grant.ok)throw new Error(grant.error || 'Autorisation refusée');
@@ -362,7 +348,7 @@ function RetailCartPanel({
         code: /^\d+$/.test(item.location) ? Number(item.location) : 0,
         location: item.location, useRelay: !!item.useRelay,
         name: item.name,
-        price: Math.round(item.price * 100),
+        price: productSellingCents(item),
         qty: item.orderQuantity,
         quantity: item.orderQuantity, // older agents/kiosks accept either spelling
       }));
@@ -722,7 +708,7 @@ function RetailCartPanel({
                     <div className="flex-1">
                       <p className="font-semibold">{item.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        ${item.price.toFixed(2)}
+                        ${item.price.toFixed(2)}{productDepositCents(item)>0&&<span> + ${(productDepositCents(item)/100).toFixed(2)} de consigne</span>}
                       </p>
                       <div className="mt-2 flex items-center gap-2">
                         <Button
@@ -783,6 +769,7 @@ function RetailCartPanel({
                 disabled={paymentState !== 'idle' || testMode.active}
               />}
               {funded&&<div className="w-full space-y-2 text-sm"><p>Valeur portée à la facture de l’entreprise : ${subtotal.toFixed(2)}</p>{funding?.available===false&&<p role="alert" className="text-amber-600">Prise en charge suspendue. Veuillez contacter votre responsable.</p>}{needsNumber?<button type="button" disabled={paymentState!=='idle'} onClick={()=>setNumberOpen(true)} className="w-full rounded-lg border p-3">{employeeNumber?`Employé ${employeeNumber} · Modifier mon numéro`:'Saisir mon numéro d’employé'}</button>:<p>Prise suivie sans identification individuelle.</p>}</div>}
+              {amounts.depositCents>0&&<div className="w-full space-y-1 text-sm"><div className="flex justify-between"><span>Articles</span><span>${(amounts.goodsSubtotalCents/100).toFixed(2)}</span></div><div className="flex justify-between"><span>Consigne (non taxable)</span><span>${(amounts.depositCents/100).toFixed(2)}</span></div></div>}
               {appliedPromo && !funded && (
                 <div className="flex w-full flex-col gap-1 text-sm">
                   <div className="flex justify-between text-muted-foreground">
@@ -790,7 +777,7 @@ function RetailCartPanel({
                     <span>${subtotal.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-green-600 font-medium">
-                    <span>Rabais ({appliedPromo.code})</span>
+                    <span>{appliedPromo.kind==='corporate'?'Prise en charge':'Rabais'} ({appliedPromo.code})</span>
                     <span>−${discount.toFixed(2)}</span>
                   </div>
                 </div>
