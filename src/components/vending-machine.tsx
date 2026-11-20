@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 import { Screensaver } from './screensaver';
 import { useIdle } from '@/hooks/use-idle';
 import { useDisplayLayout } from '@/hooks/use-display-layout';
-import { arrangeProducts, displayColumns } from '@/lib/display-layout';
+import { ProductBrowser } from './product-browser';
 
 function safeStorageGet(key: string): string | null {
   try {
@@ -230,7 +230,7 @@ export function VendingMachine() {
   
   const isCartVisible = cartItems.length > 0 || employeePending;
   const display = useDisplayLayout(isCartVisible || doorAlert.isOpen, isPersonNearby && !productsLoading);
-  const displayedProducts = arrangeProducts(products ?? [], display);
+  const displayedProducts = products ?? [];
 
   if (!isPersonNearby && !testMode.active) {
     return <Screensaver onInteraction={handleInteraction} />;
@@ -284,7 +284,7 @@ export function VendingMachine() {
 
   return (
     <div
-      className={cn("grid grid-cols-1 gap-6", isCartVisible ? 'lg:grid-cols-3' : '')}
+      className={cn("grid grid-cols-1 gap-6", display.mode==='pages'?`catalog-machine-pages ${isCartVisible?'with-cart':''}`:isCartVisible ? 'lg:grid-cols-3' : '')}
       onClick={handleInteraction}
     >
       {/* Door Alert Modal */}
@@ -301,12 +301,12 @@ export function VendingMachine() {
           isCartVisible ? 'lg:col-span-2' : 'lg:col-span-3'
         )}
       >
-        <div data-testid="catalog-grid" className="grid gap-4" style={{ gridTemplateColumns: displayColumns(display.columns) }}>
-          {displayedProducts.map((product, index) => (
+        <ProductBrowser products={displayedProducts} layout={display} renderProduct={(product,index,compact)=>(
             <ProductCard
               placeholderImages={PlaceHolderImages}
               key={product.id}
               product={product}
+              compact={compact}
               employeeMode={!testMode.active&&employeeConfig?.enabled?(employeeConfig.policies?.find((p:any)=>p.productId===product.id)?.mode||'blocked'):undefined}
               onAddToCart={handleAddToCart}
               onUpdateProduct={handleUpdateProduct}
@@ -315,16 +315,8 @@ export function VendingMachine() {
               isFirst={index === 0}
               isLast={displayedProducts.length - 1 === index}
             />
-          ))}
+        )}/>
 
-          {displayedProducts.length === 0 && (
-            <Card className="lg:col-span-3">
-              <CardContent className="p-6 text-center">
-                <div className="text-lg font-semibold">Aucun produit disponible</div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
       </div>
 
       {isCartVisible && (
