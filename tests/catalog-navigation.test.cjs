@@ -5,7 +5,7 @@ const legacy={schemaVersion:1,columns:3,orderedIds:['b','a']};
 const config={...legacy,mode:'pages',rows:2,categoriesEnabled:true,categories:[{id:'drinks',label:'Breuvages',productIds:['a']},{id:'snacks',label:'Collations',productIds:['b','hidden','removed']}]};
 const products=[{id:'a',name:'Eau',price:2,location:'10',quantity:5},{id:'b',name:'Barre',price:3,location:'20',quantity:0},{id:'c',name:'Autre',price:4,location:'30',quantity:7},{id:'hidden',visible:false}];
 test('legacy display configurations keep their exact fields and scroll behavior',()=>{
- const {validateDisplay,needsNavigation}=lib();assert.equal(JSON.stringify(validateDisplay(legacy)),JSON.stringify(legacy));assert.equal(needsNavigation(legacy),false);assert.equal(needsNavigation(config),true);
+ const {validateDisplay,needsNavigation}=lib();assert.equal(JSON.stringify(validateDisplay(legacy)),JSON.stringify(legacy));assert.equal(needsNavigation(legacy),false);assert.equal(needsNavigation(config),true);assert.equal(validateDisplay(config).schemaVersion,2);assert.equal(validateDisplay({...config,mode:'scroll',categoriesEnabled:false}).schemaVersion,1);
 });
 test('categories never hide unassigned visible products or mutate stock, prices or addresses',()=>{
  const {arrangeProducts,categoryOptions,filterCategory,validateDisplay}=lib(),before=JSON.stringify(products),layout=validateDisplay(config),ordered=arrangeProducts(products,layout);

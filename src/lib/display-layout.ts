@@ -1,7 +1,7 @@
 /** Presentation only: never changes stock, price or physical vending addresses. */
 export type DisplayCategory = { id: string; label: string; productIds: string[] };
 export type DisplayLayout = {
-  schemaVersion: 1; columns: number; orderedIds: string[];
+  schemaVersion: 1 | 2; columns: number; orderedIds: string[];
   mode?: 'scroll' | 'pages'; rows?: number;
   categoriesEnabled?: boolean; categories?: DisplayCategory[];
 };
@@ -9,13 +9,13 @@ export const DEFAULT_DISPLAY: DisplayLayout = { schemaVersion: 1, columns: 0, or
 const validId = (id: unknown): id is string => typeof id === 'string' && /^[\w-]{1,100}$/.test(id);
 export function validateDisplay(value: unknown): DisplayLayout {
   const v = value as DisplayLayout;
-  if (!v || v.schemaVersion !== 1 || !Number.isInteger(v.columns) || v.columns < 0 || v.columns > 8 ||
+  if (!v || ![1,2].includes(v.schemaVersion) || !Number.isInteger(v.columns) || v.columns < 0 || v.columns > 8 ||
       !Array.isArray(v.orderedIds) || v.orderedIds.length > 500 || v.orderedIds.some(id => !validId(id)) ||
       new Set(v.orderedIds).size !== v.orderedIds.length) throw new Error('Disposition invalide');
   if (v.mode !== undefined && !['scroll','pages'].includes(v.mode)) throw new Error('Mode d’affichage invalide');
   if (v.rows !== undefined && (!Number.isInteger(v.rows) || v.rows < 0 || v.rows > 4)) throw new Error('Nombre de rangées invalide');
   if (v.categoriesEnabled !== undefined && typeof v.categoriesEnabled !== 'boolean') throw new Error('Option de catégories invalide');
-  const result: DisplayLayout = { schemaVersion:1, columns:v.columns, orderedIds:[...v.orderedIds] };
+  const result: DisplayLayout = { schemaVersion:needsNavigation(v)?2:1, columns:v.columns, orderedIds:[...v.orderedIds] };
   if (v.mode !== undefined) result.mode=v.mode;
   if (v.rows !== undefined) result.rows=v.rows;
   if (v.categoriesEnabled !== undefined) result.categoriesEnabled=v.categoriesEnabled;
