@@ -50,7 +50,7 @@ test('zero-price fridge checkout retains its purchase identity through closing a
  await Renderer.act(async()=>{tree.root.findByType('input').props.onChange({target:{value:'client@example.invalid'}});});
  await Renderer.act(async()=>{await button('Envoyer le reçu').props.onClick();});
  assert.deepEqual(calls.find(c=>c.url.endsWith('/receipt/send')).body,{email:'client@example.invalid',sessionId:'free-fridge-123'});
- assert.ok(JSON.stringify(tree.toJSON()).includes('Reçu envoyé'));
+ assert.ok(JSON.stringify(tree.toJSON()).includes('Demande de reçu enregistrée'));
 });
 
 test('an HTTP failure never displays receipt sent even if the body says ok',async t=>{
@@ -64,5 +64,5 @@ test('an HTTP failure never displays receipt sent even if the body says ok',asyn
  await Renderer.act(async()=>{tree.root.findByType('input').props.onChange({target:{value:'client@example.invalid'}});});
  await Renderer.act(async()=>{await button('Envoyer le reçu').props.onClick();});
  assert.ok(JSON.stringify(tree.toJSON()).includes('SMTP indisponible'));
- assert.ok(!JSON.stringify(tree.toJSON()).includes('Reçu envoyé'));
+ assert.ok(!JSON.stringify(tree.toJSON()).includes('Demande de reçu enregistrée'));
 });

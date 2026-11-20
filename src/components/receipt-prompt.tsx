@@ -134,8 +134,8 @@ export function ReceiptPrompt({ vendApiBase, sessionId, simulation = false, onDo
         {phase === 'sent' && (
           <div className="flex flex-col items-center gap-4 py-8 text-white">
             <CheckCircle2 className="h-20 w-20 text-green-400" />
-            <p className="text-2xl font-bold text-green-400">Reçu envoyé !</p>
-            <p className="text-lg text-white/70">à {email}</p>
+            <p className="text-2xl font-bold text-green-400">Demande de reçu enregistrée</p>
+            <p className="text-lg text-white/70">Le reçu sera transmis à {email}</p>
           </div>
         )}
 
