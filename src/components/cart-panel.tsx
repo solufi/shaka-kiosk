@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { PromoInput, type AppliedPromo } from './promo-input';
 import { ReceiptPrompt } from './receipt-prompt';
-import { enqueueRedemption, flushRedemptions } from '@/lib/corporate-queue';
+import { flushRedemptions } from '@/lib/corporate-queue';
 
 const MACHINE_ID =
   (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_MACHINE_ID) ||
@@ -123,9 +123,9 @@ function RetailCartPanel({
   // Retry any corporate redemptions that couldn't reach the Fleet Manager
   // (e.g. a network blip at vend time) — on mount and on an interval.
   useEffect(() => {
-    void flushRedemptions();
+    void flushRedemptions().catch(() => console.error('La reprise des anciennes consommations reste à vérifier'));
     const interval = setInterval(() => {
-      void flushRedemptions();
+      void flushRedemptions().catch(() => console.error('La reprise des anciennes consommations reste à vérifier'));
     }, REDEMPTION_FLUSH_INTERVAL_MS);
     return () => clearInterval(interval);
   }, []);
@@ -265,21 +265,8 @@ function RetailCartPanel({
       }
     }
 
-    // Persist the employer share even when a later delivery or card settlement fails.
-    if (appliedPromo?.kind === 'corporate') {
-      for (const item of delivered) for (let q = 0; q < item.orderQuantity; q++) {
-        enqueueRedemption({ code: appliedPromo.code, machineId: MACHINE_ID, machineName: MACHINE_ID,
-          productId: item.id, productName: item.name, productPrice: item.price,
-          idempotencyKey: `${purchaseIdRef.current}:${item.id}:${q}` });
-      }
-      void flushRedemptions();
-    }
-
-    if (appliedPromo?.kind === 'promo' && delivered.length > 0) {
-      enqueueRedemption({ code: appliedPromo.code, machineId: MACHINE_ID, machineName: MACHINE_ID,
-        productName: 'Panier', productPrice: subtotal, idempotencyKey: `${purchaseIdRef.current}:promo` });
-      void flushRedemptions();
-    }
+    // Confirmed delivery and employer usage are journaled by the agent.
+    // Browser storage or a lost vend response cannot gate bank settlement.
 
     // A free vend has no Stripe Terminal session to capture/cancel.
     if (!freeVendRef.current) {
