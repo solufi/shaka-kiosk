@@ -41,7 +41,7 @@ for (const authenticated of [false,true]) test('practice screen uses only the ad
   let ui;await Renderer.act(async()=>{ui=Renderer.create(React.createElement(Page));});
   t.after(()=>Renderer.act(()=>ui.unmount()));
   const controls=()=>ui.root.findAllByType('button');
-  const add=()=>controls().find(b=>b.props['aria-label']==='Ajouter Boisson énergisante');
+  const add=()=>controls().find(b=>b.props['aria-label']==='Ajouter Ghost Welch’s Grape');
   assert.equal(!!add(),authenticated);
   if(authenticated){
     await Renderer.act(async()=>add().props.onClick());

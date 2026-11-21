@@ -1,167 +1,77 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import {useEffect,useState} from 'react';
+import type {DisplayLayout} from '@/lib/display-layout';
+import {showcaseProducts,type ShowcaseProduct} from '@/lib/showcase';
+import {localProductPhoto} from '@/lib/product-images';
+import {productSellingCents} from '@/lib/cart-pricing';
 
-interface ScreensaverMedia {
-  id: string;
-  filename: string;
-  url: string;
-  mediaType?: 'image' | 'video';
+interface Media {id:string;filename:string;url:string;mediaType?:'image'|'video'}
+interface Config {enabled?:boolean;durationSeconds?:number;images:Media[];overlayTitle?:string;overlaySubtitle?:string;overlayColor?:string}
+const money=new Intl.NumberFormat('fr-CA',{style:'currency',currency:'CAD'});
+const shaka='/Shaka_Transparent.png';
+
+function HeroPhoto({product,preview}:{product:ShowcaseProduct;preview:boolean}) {
+  const [failed,setFailed]=useState(false);
+  const source=(preview && product.demoPhoto) || (product.imageId && localProductPhoto(product.imageId));
+  return <img className="showcase-photo" src={source&&!failed?source:shaka} alt="" onError={()=>setFailed(true)} draggable={false} />;
 }
-
-interface ScreensaverConfig {
-  enabled: boolean;
-  durationSeconds: number;
-  images: ScreensaverMedia[];
-  overlayTitle?: string;
-  overlaySubtitle?: string;
-  overlayColor?: string;
-}
-
-const VIDEO_EXTS = ['mp4', 'webm', 'mov', 'ogg'];
-function isVideo(item: ScreensaverMedia): boolean {
-  if (item.mediaType === 'video') return true;
-  const ext = item.filename?.split('.').pop()?.toLowerCase() || '';
-  return VIDEO_EXTS.includes(ext);
-}
-
-interface ScreensaverProps {
-  onInteraction: () => void;
-}
-
-export function Screensaver({ onInteraction }: ScreensaverProps) {
-  const [config, setConfig] = useState<ScreensaverConfig | null>(null);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    fetch('/api/local-screensaver')
-      .then((r) => r.json())
-      .then((data) => {
-        if (data && data.images && data.images.length > 0) {
-          setConfig(data);
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  // Slideshow timer for images only; videos advance on 'ended'
-  useEffect(() => {
-    if (!config || config.images.length <= 1) return;
-    const current = config.images[currentIndex];
-    if (isVideo(current)) return; // video advances via onEnded
-    const interval = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % config.images.length);
-    }, (config.durationSeconds || 5) * 1000);
-    return () => clearInterval(interval);
-  }, [config, currentIndex]);
-
-  const overlayTitle = config?.overlayTitle || "Touchez l\u2019\u00e9cran pour commencer";
-  const overlaySubtitle = config?.overlaySubtitle || "D\u00e9couvrez notre s\u00e9lection de produits";
-  const overlayColor = config?.overlayColor || '#ffffff';
-
-  // Fallback: no synced media → show original video
-  if (!config || config.images.length === 0) {
-    return (
-      <div
-        className="fixed inset-0 z-50 flex cursor-pointer flex-col items-center justify-center bg-black"
-        onClick={onInteraction}
-      >
-        <video
-          src="/video.mp4"
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="absolute inset-0 h-full w-full object-cover"
-          onError={(e) => {
-            (e.target as HTMLVideoElement).style.display = 'none';
-          }}
-        />
-        <div className="absolute inset-0 bg-black/30" />
-        {/* Bottom overlay */}
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent py-10">
-          <div className="text-center">
-            <h1
-              className="text-4xl font-bold tracking-tight font-headline drop-shadow-lg"
-              style={{ color: overlayColor }}
-            >
-              {overlayTitle}
-            </h1>
-            <p
-              className="mt-2 text-lg drop-shadow-md"
-              style={{ color: overlayColor, opacity: 0.7 }}
-            >
-              {overlaySubtitle}
-            </p>
-          </div>
-        </div>
-      </div>
-    );
+export function Screensaver({onInteraction,products,layout,preview=false,included=false}:{
+  onInteraction:()=>void;products:ShowcaseProduct[];layout?:DisplayLayout;preview?:boolean;included?:boolean
+}) {
+  const [config,setConfig]=useState<Config|null>(null);
+  const [position,setPosition]=useState({id:'',mediaTurn:false,mediaIndex:0,cycle:0});
+  useEffect(()=>{
+    if(preview)return;
+    let active=true;
+    const refresh=async()=>{
+      try{
+        const response=await fetch('/api/local-screensaver',{cache:'no-store'});
+        if(!response.ok)return;
+        const c=await response.json();
+        if(active && Array.isArray(c.images))setConfig(c);
+      }catch{/* Keep the current presentation while the local configuration is unavailable. */}
+    };
+    void refresh();const timer=setInterval(refresh,30000);
+    return ()=>{active=false;clearInterval(timer);};
+  },[preview]);
+  const slides=showcaseProducts(products,layout);
+  const found=slides.findIndex(s=>s.product.id===position.id);
+  const index=found<0?0:found;
+  const slide=slides[index];
+  const mediaList=config?.enabled===false?[]:(config?.images||[]);
+  const media=slide && position.mediaTurn && mediaList.length?mediaList[position.mediaIndex%mediaList.length]:undefined;
+  const video=!!media && (media.mediaType==='video'||/\.(mp4|webm|mov|ogg)$/i.test(media.filename));
+  const nextId=slides[(index+1)%Math.max(1,slides.length)]?.product.id;
+  const insertMedia=!!mediaList.length && index===slides.length-1;
+  function next(){
+    setPosition(p=>({
+      id:(media?slides[0]?.product.id:nextId)||'',mediaTurn:!media && insertMedia,
+      mediaIndex:p.mediaIndex+(media?1:0),cycle:p.cycle+1
+    }));
   }
-
-  const currentMedia = config.images[currentIndex];
-  const isCurrentVideo = isVideo(currentMedia);
-
-  const handleVideoEnded = () => {
-    if (config && config.images.length > 1) {
-      setCurrentIndex((prev) => (prev + 1) % config.images.length);
-    }
-  };
-
-  return (
-    <div
-      className="fixed inset-0 z-50 cursor-pointer bg-black"
-      onClick={onInteraction}
-    >
-      {/* Render all media, show/hide with opacity for smooth transitions */}
-      {config.images.map((item, i) => {
-        const active = i === currentIndex;
-        if (isVideo(item)) {
-          return (
-            <video
-              key={item.id}
-              ref={active ? videoRef : undefined}
-              src={item.url}
-              autoPlay={active}
-              muted
-              playsInline
-              onEnded={handleVideoEnded}
-              className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-1000 ${
-                active ? 'opacity-100' : 'opacity-0'
-              }`}
-            />
-          );
-        }
-        return (
-          <img
-            key={item.id}
-            src={item.url}
-            alt=""
-            className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-1000 ${
-              active ? 'opacity-100' : 'opacity-0'
-            }`}
-          />
-        );
-      })}
-
-      {/* Bottom overlay — always visible */}
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent py-10 pointer-events-none">
-        <div className="text-center">
-          <h1
-            className="text-4xl font-bold tracking-tight font-headline drop-shadow-lg animate-pulse"
-            style={{ color: overlayColor }}
-          >
-            {overlayTitle}
-          </h1>
-          <p
-            className="mt-2 text-lg drop-shadow-md"
-            style={{ color: overlayColor, opacity: 0.7 }}
-          >
-            {overlaySubtitle}
-          </p>
-        </div>
+  const duration=media?Math.max(1,Math.min(120,Number(config?.durationSeconds)||5)):8;
+  useEffect(()=>{
+    if(!slide||video)return;
+    const timer=setTimeout(next,duration*1000);
+    return ()=>clearTimeout(timer);
+  },[slide?.product.id,slides[0]?.product.id,nextId,insertMedia,media?.id,video,duration,position.cycle]);
+  const action=preview?'Revenir au mode test':'Touchez l’écran pour commencer';
+  const product=slide?.product;
+  return <button type="button" className="shaka-showcase" data-theme={media?'media':slide?.kind||'brand'} onClick={onInteraction} aria-label={action}>
+    {media?<div className="showcase-media" key={media.id}>
+      {video?<video src={media.url} autoPlay muted playsInline onEnded={next} onError={next}/>:<img src={media.url} alt="" onError={next}/>}
+      {(config?.overlayTitle || config?.overlaySubtitle) && <div className="showcase-caption" style={{color:config?.overlayColor}}>{config?.overlayTitle && !/^touchez l.écran pour commencer$/i.test(config.overlayTitle) && <strong>{config.overlayTitle}</strong>}<span>{config?.overlaySubtitle}</span></div>}
+    </div>:product?<div className="showcase-slide" key={product.id+'-'+position.cycle}>
+      <div className="showcase-copy">
+        <span className="showcase-category">{slide.label}</span>
+        <strong className="showcase-name">{product.name}</strong>
+        <span className="showcase-price">{included?'Fourni par l’entreprise':money.format(productSellingCents(product)/100)}</span>
+        {!included && !!product.depositCents && <span className="showcase-deposit">dont {money.format(product.depositCents/100)} de consigne</span>}
       </div>
-    </div>
-  );
+      <span className="showcase-art"><HeroPhoto key={product.imageId||product.demoPhoto||product.id} product={product} preview={preview}/></span>
+    </div>:<div className="showcase-brand"><img src={shaka} alt="Shaka" draggable={false}/></div>}
+    {(product||preview) && <span className="showcase-top">{preview?'Aperçu · Mode test':'Shaka'}</span>}
+    <span className="showcase-action">{action}<span aria-hidden="true">↗</span></span>
+  </button>;
 }

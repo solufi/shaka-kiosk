@@ -1,0 +1,41 @@
+const test=require('node:test'),assert=require('node:assert/strict'),path=require('node:path');
+const React=require('react'),Renderer=require('react-test-renderer');
+const {loader}=require('./loader.cjs');
+const root=path.resolve(__dirname,'..');
+const item=(id,name,properties={})=>({id,name,quantity:1,price:2,...properties});
+const show=loader(root,{}).load('src/lib/showcase.ts').showcaseProducts;
+test('rotation uses Fleet category assignments, sellable quantities and visible products',()=>{
+  const layout={orderedIds:['d1','d2','s1','s2'],columns:0,schemaVersion:2,categories:[{id:'boire',label:'Breuvages',productIds:['d1','d2']}]};
+  const products=[item('s1','Chips'),item('s2','Barre'),item('d1','Article A'),item('d2','Article B'),
+    item('gone','Eau',{quantity:0}),item('hidden','C4',{visible:false}),item('unverified','biscuit',{stockUnavailable:true}),item('bad','Eau',{quantity:NaN})];
+  assert.deepEqual(Array.from(show(products,layout),s=>s.product.id),['d1','s1','d2','s2']);
+  assert.equal(show(products.slice(4),layout).length,0);
+});
+
+async function screen(t,products,preview,config) {
+  const timers=new Map(),requests=[];let clicks=0;
+  const {Screensaver}=loader(root,{}, {},{
+    fetch:async url=>{requests.push(url);return {ok:true,json:async()=>config};},
+    setTimeout:(fn,ms)=>{timers.set(ms,fn);return ms;},clearTimeout:id=>timers.delete(id)
+  }).load('src/components/screensaver.tsx');
+  const props={products,preview,onInteraction:()=>clicks++};
+  let ui;
+  await Renderer.act(async()=>{ui=Renderer.create(React.createElement(Screensaver,props));});
+  t.after(()=>Renderer.act(()=>ui.unmount()));
+  return {ui,requests,get clicks(){return clicks;},tick:ms=>Renderer.act(()=>timers.get(ms)()),update:products=>Renderer.act(()=>ui.update(React.createElement(Screensaver,{...props,products})))};
+}
+test('virtual preview zooms through its own products, exits on first tap and never reads machine media',async t=>{
+  const f=await screen(t,[item('a','Eau',{demoPhoto:'/showcase/boisson.webp'}),item('b','Chips')],true);
+  assert.equal(f.ui.root.findByType('img').props.src,'/showcase/boisson.webp');
+  await f.tick(8000);assert.match(JSON.stringify(f.ui.toJSON()),/Chips/);
+  await f.update([item('b','Chips',{quantity:0})]);assert.equal(f.ui.root.findByType('img').props.src,'/Shaka_Transparent.png');
+  f.ui.root.findByType('button').props.onClick();assert.equal(f.clicks,1);assert.deepEqual(f.requests,[]);
+});
+test('when idle the last removed product gives way to the logo, even during a custom slide',async t=>{
+  const f=await screen(t,[item('one','Eau',{depositCents:10}),item('two','Chips')],false,{enabled:true,durationSeconds:3,images:[{id:'a',filename:'pub.jpg',url:'/pub.jpg'}]});
+  await f.tick(8000);await f.tick(8000);assert.equal(f.ui.root.findByType('img').props.src,'/pub.jpg');
+  await f.tick(3000);assert.match(JSON.stringify(f.ui.toJSON()),/Eau/);
+  await f.tick(8000);await f.tick(8000);await f.update([]);
+  assert.equal(f.ui.root.findByType('img').props.src,'/Shaka_Transparent.png');
+  assert.equal(f.ui.root.findByType('button').props['aria-label'],'Touchez l’écran pour commencer');
+});

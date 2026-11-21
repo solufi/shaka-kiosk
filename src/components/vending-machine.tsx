@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Product, CartItem } from '@/lib/types';
 import { ProductCard } from '@/components/product-card';
 import { PlaceHolderImages } from "@/lib/placeholder-images";
@@ -43,31 +43,30 @@ export function VendingMachine() {
   const [employeeConfig,setEmployeeConfig]=useState<any>(null);
   useEffect(()=>{let active=true;const load=()=>fetch('/api/machine/employee/config',{cache:'no-store'}).then(r=>r.json()).then(d=>{if(active&&d.ok)setEmployeeConfig(d);}).catch(()=>{});void load();const timer=setInterval(load,30000);return()=>{active=false;clearInterval(timer);};},[]);
 
-  const loadProducts = async () => {
-    // 1) Immediately show localStorage cache (instant display)
-    const cached = safeStorageGet(OFFLINE_PRODUCTS_LS_KEY);
-    if (cached) {
-      try {
-        const parsed = JSON.parse(cached) as Product[];
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setProducts(parsed);
-          setProductsLoading(false);
-        }
-      } catch {
-        // ignore
-      }
-    }
+  const [verifiedProducts,setVerifiedProducts] = useState<Product[]>([]);
+  const inventoryRequest=useRef(0);
+  useEffect(()=>{
+    try {
+      const cached=JSON.parse(safeStorageGet(OFFLINE_PRODUCTS_LS_KEY)||'null');
+      if(Array.isArray(cached)) {setProducts(cached);setProductsLoading(false);}
+    } catch { /* A damaged display cache is refreshed from the local agent. */ }
+  },[]);
 
+  const loadProducts = async () => {
+    const sequence=++inventoryRequest.current;
     // 2) Background refresh from API (fast, 2 attempts max)
     const maxAttempts = 2;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
-        const res = await fetch(`/api/local-products?v=${Date.now()}`, { cache: 'no-store' });
+        const res = await fetch(`/api/local-products?v=${Date.now()}`, { cache: 'no-store', signal: AbortSignal.timeout(5000) });
         const json = (await res.json()) as { ok?: boolean; data?: Product[] };
-        if (res.ok && Array.isArray(json?.data) && json.data.length > 0) {
+        if (sequence !== inventoryRequest.current) return;
+        if (res.ok && json?.ok && Array.isArray(json.data)) {
+          setVerifiedProducts(json.data);
           setProducts(json.data);
           safeStorageSet(OFFLINE_PRODUCTS_LS_KEY, JSON.stringify(json.data));
-          break;
+          setProductsLoading(false);
+          return;
         }
       } catch {
         // ignore and retry
@@ -77,13 +76,9 @@ export function VendingMachine() {
       }
     }
 
-    setProductsLoading(false);
+    if (sequence===inventoryRequest.current) {setVerifiedProducts([]);setProductsLoading(false);}
   };
 
-  useEffect(() => {
-    // Load products from cache/API on mount
-    void loadProducts();
-  }, []);
 
   useEffect(() => {
     // When navigating back from admin, the page may be kept alive.
@@ -233,7 +228,10 @@ export function VendingMachine() {
   const displayedProducts = products ?? [];
 
   if (!isPersonNearby && !testMode.active) {
-    return <Screensaver onInteraction={handleInteraction} />;
+    const allowed=employeeConfig?.enabled && !employeeConfig?.funding?.enabled
+      ? verifiedProducts.filter(p=>employeeConfig.policies?.some((rule:{productId:string;mode:string})=>rule.productId===p.id && rule.mode!=='blocked'))
+      : verifiedProducts;
+    return <Screensaver products={allowed} layout={display} included={!!employeeConfig?.funding?.enabled} onInteraction={handleInteraction} />;
   }
 
   if (productsLoading && !products) {
