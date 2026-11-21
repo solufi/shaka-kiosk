@@ -7,6 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -398,9 +399,16 @@ export function DashboardClient() {
     <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
       <Card className="lg:col-span-2">
         <CardHeader>
+          <CardTitle>Mode test</CardTitle>
+          <CardDescription>Ajoutez des articles fictifs et simulez des achats avec un stock indépendant.</CardDescription>
+        </CardHeader>
+        <CardContent><Button asChild><Link href="/essais">Ouvrir le mode test</Link></Button></CardContent>
+      </Card>
+      <Card className="lg:col-span-2">
+        <CardHeader>
           <div className="flex items-center gap-2">
             <Wrench className="h-6 w-6" />
-            <CardTitle>Free Vend (Test)</CardTitle>
+            <CardTitle>Test matériel · distribution réelle</CardTitle>
           </div>
           <CardDescription>
             Envoie une commande de distribution sans paiement pour vérifier l'emplacement et confirmer le drop.

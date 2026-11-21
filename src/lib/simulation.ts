@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import {productSellingCents} from './cart-pricing';
 export interface SimulationReceipt { id:string; createdAt:string; items:{productId:string;name:string;qty:number;price:number}[]; theoreticalCents:number; }
 export function simulateCheckout(input:unknown,catalog:any[]):SimulationReceipt {
@@ -11,5 +10,5 @@ export function simulateCheckout(input:unknown,catalog:any[]):SimulationReceipt 
     if (!product || product.stockUnavailable || !Number.isFinite(product.price) || product.price<0 || value.qty>product.quantity) throw new Error('Produit indisponible pour ce test');
     return {productId:product.id,name:String(product.name),qty:value.qty,price:productSellingCents(product)};
   });
-  return {id:'TEST-'+randomUUID(),createdAt:new Date().toISOString(),items,theoreticalCents:items.reduce((sum,item)=>sum+item.qty*item.price,0)};
+  return {id:'TEST-'+crypto.randomUUID(),createdAt:new Date().toISOString(),items,theoreticalCents:items.reduce((sum,item)=>sum+item.qty*item.price,0)};
 }
