@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { PracticeInterac } from '@/components/practice-interac';
 import { Input } from '@/components/ui/input';
 import { productSellingCents } from '@/lib/cart-pricing';
 import { newPracticeShop, addPracticeProduct, changePracticeCart, payPracticeCart } from '@/lib/practice-shop';
@@ -12,6 +13,7 @@ const dollars = (cents:number) => (cents/100).toLocaleString('fr-CA',{style:'cur
 export default function PracticePage() {
   const [access,setAccess] = useState<'loading'|'admin'|'locked'>('loading');
   const [shop,setShop] = useState(newPracticeShop);
+  const [terminal,setTerminal] = useState(false);
   const [adding,setAdding] = useState(false);
   const [error,setError] = useState('');
   const [showHistory,setShowHistory] = useState(false);
@@ -25,6 +27,7 @@ export default function PracticePage() {
         if (mounted) setAccess(allowed ? 'admin' : 'locked');
       } catch { if (mounted) setAccess('locked'); }
     }
+    if (typeof sessionStorage!=='undefined' && sessionStorage.getItem('shaka-practice-interac-pending')) setTerminal(true);
     void verify();
     const timer = setInterval(verify,30000);
     window.addEventListener('pageshow',verify);
@@ -55,7 +58,11 @@ export default function PracticePage() {
     <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400 bg-amber-100 p-4 text-amber-950">
       <div><h1 className="text-2xl font-bold">Mode test</h1><p>Articles, stock et transactions fictifs. La session se termine en quittant ou en rechargeant cet écran.</p></div>{returnLink}
     </header>
-    <div className="grid gap-4 md:grid-cols-[3fr_2fr]">
+    {terminal ? <PracticeInterac amount={total} shop={shop} restore={setShop} close={()=>setTerminal(false)} approved={(original,reference)=>{
+      const settled=payPracticeCart(original);
+      settled.receipts[0]={...settled.receipts[0],terminalReference:reference};
+      setShop(settled);
+    }} /> : <div className="grid gap-4 md:grid-cols-[3fr_2fr]">
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-xl font-semibold">Articles fictifs</h2><Button variant="outline" onClick={()=>{setAdding(!adding);setError('');}}>{adding?'Annuler':'Créer un article'}</Button></div>
         {adding && <form onSubmit={add} className="grid gap-3 rounded-xl border p-4">
@@ -76,11 +83,12 @@ export default function PracticePage() {
         {items.map(p=><div key={p.id} className="flex flex-wrap items-center justify-between gap-2 border-b pb-2"><span>{shop.cart[p.id]} × {p.name}</span><Button size="sm" variant="outline" aria-label={'Retirer une unité de '+p.name} onClick={()=>setShop(s=>changePracticeCart(s,p.id,-1))}>−1</Button></div>)}
         <p>Total fictif <strong>{dollars(total)}</strong></p>
         <Button disabled={!items.length} onClick={purchase}>Simuler le paiement et la distribution</Button>
+        <Button variant="outline" onClick={()=>setTerminal(true)}>Tester le terminal Interac</Button>
         {last && <p role="status" className="rounded-lg bg-emerald-100 p-3 text-emerald-950">Achat simulé de {dollars(last.theoreticalCents)}. Montant débité 0,00 $.</p>}
         {shop.receipts.length>0 && <Button variant="outline" onClick={()=>setShowHistory(!showHistory)}>{showHistory?'Masquer les transactions':'Transactions fictives'} ({shop.receipts.length})</Button>}
-        {showHistory && <ol className="space-y-2">{shop.receipts.map(r=><li className="rounded-lg border p-3" key={r.id}><strong>{dollars(r.theoreticalCents)}</strong> · {new Date(r.createdAt).toLocaleTimeString('fr-CA')}{r.items.map(i=><p key={i.productId}>{i.qty} × {i.name}</p>)}</li>)}</ol>}
+        {showHistory && <ol className="space-y-2">{shop.receipts.map(r=><li className="rounded-lg border p-3" key={r.id}><strong>{dollars(r.theoreticalCents)}</strong> · {new Date(r.createdAt).toLocaleTimeString('fr-CA')}{r.terminalReference && <p>Interac · {r.terminalReference}</p>}{r.items.map(i=><p key={i.productId}>{i.qty} × {i.name}</p>)}</li>)}</ol>}
       </section>
-    </div>
+    </div>}
     {error && <p role="alert" className="text-red-700">{error}</p>}
   </main>;
 }

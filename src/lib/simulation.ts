@@ -1,5 +1,5 @@
 import {productSellingCents} from './cart-pricing';
-export interface SimulationReceipt { id:string; createdAt:string; items:{productId:string;name:string;qty:number;price:number}[]; theoreticalCents:number; }
+export interface SimulationReceipt { id:string; terminalReference?:string; createdAt:string; items:{productId:string;name:string;qty:number;price:number}[]; theoreticalCents:number; }
 export function simulateCheckout(input:unknown,catalog:any[]):SimulationReceipt {
   if (!Array.isArray(input) || !input.length || input.length>100) throw new Error('Panier de test invalide');
   const seen=new Set<string>();
