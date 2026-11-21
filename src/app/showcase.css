@@ -10,13 +10,13 @@
 .showcase-top,.showcase-action { position: absolute; z-index: 2; left: 6%; }
 .showcase-top { top: 6%; font-size: clamp(14px,2.1vmin,24px); font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
 .showcase-action { bottom: 6%; display: inline-flex; align-items: center; gap: 1.4em; padding: .7em 1.15em; border-radius: 2em; background: var(--ink); color: white; font-weight: 650; font-size: clamp(14px,2.6vmin,32px); }
-.showcase-slide { position: absolute; inset: 0; display: grid; grid-template-columns: 46% 54%; align-items: center; padding: 9vh 5.8vw 13vh; animation: showcase-reveal .65s ease-out both; }
+.showcase-slide { position: absolute; inset: 0; display: grid; grid-template-columns: 46% 54%; grid-template-rows: minmax(0,1fr); align-items: center; padding: 9vh 5.8vw 13vh; animation: showcase-reveal .65s ease-out both; }
 .showcase-copy { position: relative; z-index: 1; display: grid; justify-items: start; }
 .showcase-category { font-size: clamp(13px,2.3vmin,26px); font-weight: 650; margin-bottom: 1.1em; }
 .showcase-name { max-width: 100%; font-size: clamp(26px,6.5vmin,98px); line-height: 1.04; font-weight: 800; letter-spacing: -.043em; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5; overflow: hidden; }
 .showcase-price { margin-top: .65em; font-weight: 650; font-size: clamp(20px,4.2vmin,55px); line-height: 1.1; }
 .showcase-deposit { margin-top: .45em; font-size: clamp(12px,2vmin,23px); }
-.showcase-art { position: relative; display: grid; place-items: center; justify-self: center; width: min(43vw,68vh); aspect-ratio: 1; border-radius: 50%; background: var(--tint); }
+.showcase-art { position: relative; display: grid; place-items: center; justify-self: center; width: min(43vw,68vh); height: min(43vw,68vh); grid-template: minmax(0,1fr) / minmax(0,1fr); border-radius: 50%; background: var(--tint); }
 .showcase-photo { mix-blend-mode: multiply; height: 87%; width: 85%; object-fit: contain; animation: showcase-zoom 8s ease-in-out both; }
 .showcase-brand { position: absolute; inset: 0; display: grid; place-items: center; background: radial-gradient(ellipse at center,var(--paper) 30%,var(--tint) 140%); }
 .showcase-brand img { width: min(70vw,72vh); height: min(70vw,72vh); object-fit: contain; animation: showcase-breathe 8s ease-in-out infinite alternate; }
@@ -29,7 +29,7 @@
 @keyframes showcase-breathe { from { transform: scale(.92); } to { transform: scale(1.05); } }
 @media (orientation:portrait) {
   .showcase-slide { grid-template-columns: 1fr; grid-template-rows: minmax(0,1.35fr) minmax(0,1fr); padding: 11vh 8vw 15vh; gap: 2vh; }
-  .showcase-art { grid-row: 1; width: min(78vw,35vh); }
+  .showcase-art { grid-row: 1; width: min(78vw,35vh); height: min(78vw,35vh); }
   .showcase-copy { align-self: start; }
   .showcase-name { font-size: clamp(24px,6.9vmin,82px); -webkit-line-clamp: 3; }
 }
