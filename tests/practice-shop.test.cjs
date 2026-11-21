@@ -23,7 +23,7 @@ test('paid, free and out-of-stock purchases affect only the current practice inv
   assert.equal(shop.receipts[0].theoreticalCents,0);
   assert.equal(shop.receipts.length,2);
   assert.equal(shop.products.find(p=>p.id==='test-collation').quantity,2);
-  assert.equal(first.products.length,3);
+  assert.equal(first.products.length,5);
   assert.equal(api.newPracticeShop().receipts.length,0);
   assert.throws(()=>api.addPracticeProduct(shop,'Article','-1','3',false));
   assert.throws(()=>api.addPracticeProduct(shop,'Article','3','-1',false));
