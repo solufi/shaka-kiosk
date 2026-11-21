@@ -1,5 +1,6 @@
 import type {Metadata} from 'next';
 import './globals.css';
+import './showcase.css';
 import { Toaster } from "@/components/ui/toaster";
 import { ReactNode } from 'react';
 

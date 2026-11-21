@@ -6,6 +6,7 @@ export interface PracticeProduct {
   price: number;
   quantity: number;
   depositCents: number;
+  demoPhoto?: string;
 }
 
 export interface PracticeShop {
@@ -18,8 +19,8 @@ export function newPracticeShop(): PracticeShop {
   return {products:[
     {id:'test-interac-ok',name:'Essai Interac · approbation',price:1,quantity:5,depositCents:0},
     {id:'test-interac-refus',name:'Essai Interac · refus',price:1.05,quantity:5,depositCents:0},
-    {id:'test-barre',name:'Barre protéinée',price:2.50,quantity:5,depositCents:0},
-    {id:'test-boisson',name:'Boisson énergisante',price:3,quantity:4,depositCents:10},
+    {id:'test-barre',name:'Grenade Oreo',demoPhoto:'/showcase/barre.webp',price:2.50,quantity:5,depositCents:0},
+    {id:'test-boisson',name:'Ghost Welch’s Grape',demoPhoto:'/showcase/boisson.webp',price:3,quantity:4,depositCents:10},
     {id:'test-collation',name:'Échantillon gratuit',price:0,quantity:3,depositCents:0},
   ],cart:{},receipts:[]};
 }

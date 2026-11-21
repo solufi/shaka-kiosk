@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { Screensaver } from '@/components/screensaver';
 import { PracticeInterac } from '@/components/practice-interac';
 import { Input } from '@/components/ui/input';
 import { productSellingCents } from '@/lib/cart-pricing';
@@ -13,6 +14,7 @@ const dollars = (cents:number) => (cents/100).toLocaleString('fr-CA',{style:'cur
 export default function PracticePage() {
   const [access,setAccess] = useState<'loading'|'admin'|'locked'>('loading');
   const [shop,setShop] = useState(newPracticeShop);
+  const [preview,setPreview]=useState(false);
   const [terminal,setTerminal] = useState(false);
   const [adding,setAdding] = useState(false);
   const [error,setError] = useState('');
@@ -51,6 +53,7 @@ export default function PracticePage() {
   }
   const returnLink = <Button variant="outline" asChild><Link href={access==='admin'?'/dashboard':'/'} replace>Quitter le mode test</Link></Button>;
   if (access !== 'admin') return <main className="mx-auto grid max-w-lg gap-4 p-8"><h1 className="text-2xl font-bold">Mode test</h1><p>{access==='loading'?'Vérification de la session…':'Connectez-vous au menu Admin pour ouvrir les essais.'}</p>{returnLink}</main>;
+  if(preview) return <Screensaver preview products={shop.products} onInteraction={()=>setPreview(false)} />;
   const items = shop.products.filter(p=>shop.cart[p.id]);
   const total = items.reduce((sum,p)=>sum+shop.cart[p.id]*productSellingCents(p),0);
   const last = shop.receipts[0];
@@ -64,6 +67,7 @@ export default function PracticePage() {
       setShop(settled);
     }} /> : <div className="grid gap-4 md:grid-cols-[3fr_2fr]">
       <section className="space-y-3">
+        <Button variant="outline" onClick={()=>setPreview(true)}>Aperçu de l’économiseur d’écran</Button>
         <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-xl font-semibold">Articles fictifs</h2><Button variant="outline" onClick={()=>{setAdding(!adding);setError('');}}>{adding?'Annuler':'Créer un article'}</Button></div>
         {adding && <form onSubmit={add} className="grid gap-3 rounded-xl border p-4">
           <label>Nom<Input name="name" required maxLength={60} autoFocus /></label>
