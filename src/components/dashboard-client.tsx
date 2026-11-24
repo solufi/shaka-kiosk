@@ -33,6 +33,8 @@ type FreeVendResult = {
   sequence?: string;
   dropDetected?: boolean;
   error?: string;
+  location?: string;
+  pending?: boolean;
   stdout?: string;
   stderr?: string;
 };
@@ -95,6 +97,8 @@ export function DashboardClient() {
   const [freeVendLocation, setFreeVendLocation] = useState('');
   const [freeVendLoading, setFreeVendLoading] = useState(false);
   const [freeVendResult, setFreeVendResult] = useState<FreeVendResult | null>(null);
+  const rowTestInFlight = useRef(false);
+  const [pendingRow, setPendingRow] = useState<{location: string; commandId: string} | null>(null);
   const [freeVendSeq, setFreeVendSeq] = useState('');
 
   // Relay test states
@@ -288,51 +292,26 @@ export function DashboardClient() {
   };
 
   const handleFreeVend = async () => {
-    if (!freeVendLocation) return;
+    if ((!freeVendLocation && !pendingRow) || rowTestInFlight.current) return;
+    const command = pendingRow || {location: freeVendLocation, commandId: `admin-vend:${crypto.randomUUID()}`};
+    rowTestInFlight.current = true;
+    setPendingRow(command);
     setFreeVendLoading(true);
     setFreeVendResult(null);
-
     try {
-      const url = getVendApiUrl();
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ location: freeVendLocation, machineId: 'admin-free-vend' }),
+      const res = await fetch('/api/admin/vend-test', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(command),
       });
-
-      let data: FreeVendResult | null = null;
-      try {
-        data = (await res.json()) as FreeVendResult;
-      } catch {
-        data = { success: res.ok, message: await res.text() };
-      }
-
-      if (!res.ok) {
-        setFreeVendResult({ ...data, success: false, error: data?.error || data?.message || 'Erreur API' });
-        toast({
-          variant: 'destructive',
-          title: 'Free Vend échoué',
-          description: data?.error || data?.message || 'Erreur API',
-        });
-        return;
-      }
-
-      setFreeVendResult({ ...data, success: data?.success ?? true });
-      toast({
-        title: 'Free Vend envoyé',
-        description: data?.message || `Commande envoyée pour ${freeVendLocation}.`,
-      });
-    } catch (error) {
-      console.error('Free vend failed:', error);
-      setFreeVendResult({ success: false, error: 'Impossible de joindre le service de distribution.' });
-      toast({
-        variant: 'destructive',
-        title: 'Free Vend échoué',
-        description: 'Impossible de joindre le service de distribution.',
-      });
+      const data = await res.json();
+      if (!data.pending && (res.ok || res.status === 409 || res.status === 400)) setPendingRow(null);
+      const success = res.ok && data.ok === true && data.dropDetected === true;
+      setFreeVendResult({...data, success, location: command.location,
+        message: success ? 'Chute détectée.' : undefined,
+        error: data.dropDetected === false ? 'Aucune chute détectée après un essai.' : data.error});
+    } catch {
+      setFreeVendResult({success: false, location: command.location, error: 'Réponse interrompue. Vérifiez le résultat du même essai.'});
     } finally {
+      rowTestInFlight.current = false;
       setFreeVendLoading(false);
     }
   };
@@ -429,14 +408,14 @@ export function DashboardClient() {
           </div>
 
           <div>
-            <MachineLayoutSelector value={freeVendLocation} onChange={setFreeVendLocation} />
+            <MachineLayoutSelector disabled={freeVendLoading || Boolean(pendingRow)} value={freeVendLocation} onChange={setFreeVendLocation} />
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={handleFreeVend} disabled={!freeVendLocation || freeVendLoading}>
-              {freeVendLoading ? 'En cours...' : 'Free Vend'}
+              {freeVendLoading ? 'En cours...' : pendingRow ? 'Vérifier le résultat' : 'Free Vend — tester la rangée'}
             </Button>
             <div className="text-sm text-muted-foreground">
-              Endpoint: {getVendApiUrl()}
+              Un essai physique, sans paiement.
             </div>
           </div>
 
@@ -493,7 +472,7 @@ export function DashboardClient() {
               <AlertDescription>
                 <div className="space-y-2">
                   <div>
-                    <span className="font-semibold">Emplacement:</span> {freeVendLocation}
+                    <span className="font-semibold">Emplacement:</span> {freeVendResult.location || freeVendLocation}
                   </div>
                   {freeVendResult.message && (
                     <div>
