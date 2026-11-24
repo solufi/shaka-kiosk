@@ -7,7 +7,7 @@ function setup(){
  const session=x.load('src/app/api/admin/session/route.ts'),relay=x.load('src/app/api/admin/relay-test/route.ts');
  const request=(body,extra={})=>({url:'http://localhost:3000/api/admin/session',headers:new Headers({host:'localhost:3000',origin:'http://localhost:3000',...extra}),text:async()=>JSON.stringify(body)});
  const login=async()=>{const r=await session.POST(request({pin:'123456'}));assert.equal(r.status,200);return r.headers.get('set-cookie').split(';')[0];};
- return {session,relay,request,login,calls,env:x.env,ctx:x.ctx};
+ return {row:x.load('src/app/api/admin/vend-test/route.ts'),session,relay,request,login,calls,env:x.env,ctx:x.ctx};
 }
 test('relay test requires a server-verified admin login and keeps credentials out of the client',async()=>{
  const x=setup();const command={commandId:'admin-relay:test-123'};
@@ -36,4 +36,20 @@ test('PIN guessing is bounded and a test cannot select arbitrary GPIOs or dispen
  const proxy=loader(root,{AGENT_TOKEN:'private-agent-test'}).load('src/app/api/machine/[...path]/route.ts');
  assert.equal((await proxy.POST({...y.request({}),method:'POST'},{params:Promise.resolve({path:['admin','relay-test']})})).status,404);
  assert.equal(y.calls.length,0);
+});
+
+test('row test accepts only a signed local admin session and a single slot',async()=>{
+ const x=setup(), command={location:'31',commandId:'admin-vend:one'};
+ assert.equal((await x.row.POST(x.request(command))).status,401);
+ const cookie=await x.login();
+ assert.equal((await x.row.POST(x.request(command,{cookie,origin:'https://other.invalid'}))).status,401);
+ for(const body of [{...command,location:'3132'},{...command,seq:'31'},{...command,commandId:'session:1'}]){
+  assert.equal((await x.row.POST(x.request(body,{cookie}))).status,400);
+ }
+ assert.equal(x.calls.length,0);
+ assert.equal((await x.row.POST(x.request(command,{cookie}))).status,200);
+ assert.equal(x.calls[0].url,'http://127.0.0.1:5001/admin/vend-test');
+ assert.deepEqual(JSON.parse(x.calls[0].options.body),command);
+ const proxy=loader(root,{AGENT_TOKEN:'private-agent-test'}).load('src/app/api/machine/[...path]/route.ts');
+ assert.equal((await proxy.POST({...x.request(command),method:'POST'},{params:Promise.resolve({path:['admin','vend-test']})})).status,404);
 });
