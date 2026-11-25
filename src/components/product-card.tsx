@@ -226,13 +226,13 @@ export function ProductCard({ product, compact=false, employeeMode, placeholderI
               {stockLabel}
             </Badge>
             <Button
-              className="flex-1"
+              className="catalog-add-button"
               onClick={() => onAddToCart(product)}
               disabled={isSoldOut || employeeMode==='blocked'}
               aria-label={`Ajouter ${product.name} au panier`}
             >
-              <PlusCircle className="mr-2 h-5 w-5" />
-              {compact?'Ajouter':'Ajouter au panier'}
+              <PlusCircle aria-hidden="true" />
+              <span>Ajouter</span>
             </Button>
           </CardFooter>
         </Card>
@@ -273,7 +273,7 @@ export function ProductCard({ product, compact=false, employeeMode, placeholderI
           </div>
           <DialogFooter className="product-detail-actions">
             <DialogClose asChild><Button variant="outline" size="lg">Fermer</Button></DialogClose>
-            <DialogClose asChild><Button size="lg" onClick={()=>onAddToCart(product)} disabled={isSoldOut || employeeMode==='blocked'} aria-label={`Ajouter ${product.name} au panier`}><PlusCircle className="mr-2 h-5 w-5"/>Ajouter au panier</Button></DialogClose>
+            <DialogClose asChild><Button size="lg" onClick={()=>onAddToCart(product)} disabled={isSoldOut || employeeMode==='blocked'} aria-label={`Ajouter ${product.name} au panier`}><PlusCircle aria-hidden="true" className="h-4 w-4"/>Ajouter</Button></DialogClose>
           </DialogFooter>
         </DialogContent>
       </Dialog>

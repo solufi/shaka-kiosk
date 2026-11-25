@@ -1,11 +1,11 @@
 'use client';
 import type { ReactNode } from 'react';
 import { TestModeProvider, TestModeButton } from '@/components/test-mode';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { flushRedemptions } from '@/lib/corporate-queue';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutGrid, BarChart2, PanelLeft, LogOut } from 'lucide-react';
+import { LayoutGrid, BarChart2, LogOut } from 'lucide-react';
 
 import {
   SidebarProvider,
@@ -17,12 +17,12 @@ import {
   SidebarMenuButton,
   SidebarInset,
   SidebarFooter,
+  SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/logo';
 import { KeypadLoginDialog } from '@/components/keypad-login-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { heartbeatService } from '@/lib/heartbeat-service';
 
 const navItems = [
   { href: '/', label: 'Distributeur', icon: LayoutGrid },
@@ -39,7 +39,10 @@ function AppLayoutContent({ children }: { children: ReactNode }) {
   }, []);
   const pathname = usePathname();
   const { toast } = useToast();
-  const [isLocalAdmin, setIsLocalAdmin] = useState(false);
+  const [access, setAccess] = useState<'checking' | 'customer' | 'admin'>('checking');
+  const [logoutState, setLogoutState] = useState<'idle' | 'pending' | 'failed'>('idle');
+  const exiting = useRef(false);
+  const isLocalAdmin = access === 'admin';
   
   const [adminClickCount, setAdminClickCount] = useState(0);
   const [showAdminLogin, setShowAdminLogin] = useState(false);
@@ -90,16 +93,30 @@ function AppLayoutContent({ children }: { children: ReactNode }) {
     }
   };
 
-  const handleLogout = () => {
-    void fetch('/api/admin/session', {method:'DELETE'});
+  const handleLogout = async () => {
+    if (exiting.current && logoutState !== 'failed') return;
+    exiting.current = true;
+    setAccess('customer');
+    setShowAdminLogin(false);
+    setLogoutState('pending');
     try {
       window.localStorage.removeItem('shaka:isAdmin');
-      // Record logout time so vending-machine can skip screensaver
-      window.sessionStorage.setItem('shaka:lastAdminLogout', Date.now().toString());
-      window.dispatchEvent(new Event('shaka-admin-changed'));
+      window.sessionStorage.removeItem('shaka:test-mode');
+    } catch { /* The server cookie is cleared independently. */ }
+    window.dispatchEvent(new Event('shaka-admin-changed'));
+    try {
+      const response = await fetch('/api/admin/session', {
+        method: 'DELETE', cache: 'no-store', signal: AbortSignal.timeout(5000),
+      });
+      if (!response.ok || (await response.json()).ok !== true) throw new Error();
     } catch {
-      // ignore
+      setLogoutState('failed');
+      return;
     }
+    try {
+      window.sessionStorage.setItem('shaka:lastAdminLogout', Date.now().toString());
+    } catch { /* Navigation also works without browser storage. */ }
+    window.location.replace('/');
   };
 
   // Cleanup timeout on component unmount
@@ -112,31 +129,55 @@ function AppLayoutContent({ children }: { children: ReactNode }) {
   }, [adminButtonTimeout]);
 
   useEffect(() => {
-    try {
-      const v = window.localStorage.getItem('shaka:isAdmin');
-      setIsLocalAdmin(v === '1');
-    } catch {
-      setIsLocalAdmin(false);
-    }
-
-    const handler = () => {
+    let currentCheck = 0;
+    async function verify() {
+      const check = ++currentCheck;
+      if (exiting.current) return;
       try {
-        const v = window.localStorage.getItem('shaka:isAdmin');
-        setIsLocalAdmin(v === '1');
-      } catch {
-        setIsLocalAdmin(false);
-      }
-    };
-
-    window.addEventListener('storage', handler);
-    window.addEventListener('shaka-admin-changed', handler as EventListener);
+        if (window.localStorage.getItem('shaka:isAdmin') === '1') {
+          setAccess('checking');
+          const response = await fetch('/api/admin/session', {
+            cache: 'no-store', signal: AbortSignal.timeout(5000),
+          });
+          const authenticated = response.ok && (await response.json()).authenticated === true;
+          if (check !== currentCheck || exiting.current) return;
+          if (authenticated) {
+            setAccess('admin');
+            return;
+          }
+          window.localStorage.removeItem('shaka:isAdmin');
+          window.dispatchEvent(new Event('shaka-admin-changed'));
+        }
+      } catch { /* Return to customer mode if the local session cannot be verified. */ }
+      if (check === currentCheck && !exiting.current) setAccess('customer');
+    }
+    function onStorage(event: StorageEvent) {
+      if (event.key === null || event.key === 'shaka:isAdmin') void verify();
+    }
+    void verify();
+    window.addEventListener('pageshow', verify);
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('shaka-admin-changed', verify);
     return () => {
-      window.removeEventListener('storage', handler);
-      window.removeEventListener('shaka-admin-changed', handler as EventListener);
+      currentCheck++;
+      window.removeEventListener('pageshow', verify);
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('shaka-admin-changed', verify);
     };
-  }, []);
+  }, [pathname]);
 
-  const hasAdminAccess = isLocalAdmin;
+  const isDashboard = pathname === '/dashboard';
+  useEffect(() => {
+    if (isDashboard && access === 'customer' && !exiting.current) window.location.replace('/');
+  }, [isDashboard, access]);
+
+  if (logoutState !== 'idle') {
+    return <main className="grid min-h-svh place-content-center gap-4 text-center">
+      <p role="status">{logoutState === 'pending' ? 'Déconnexion…' : 'La déconnexion doit être confirmée par la machine.'}</p>
+      {logoutState === 'failed' && <Button onClick={handleLogout}>Réessayer la déconnexion</Button>}
+    </main>;
+  }
+  if (isDashboard && !isLocalAdmin) return null;
 
   const handleNavClick = (href: string) => (e: React.MouseEvent) => {
     // On Pi kiosk we prefer a full reload when returning to '/', to avoid
@@ -154,7 +195,7 @@ function AppLayoutContent({ children }: { children: ReactNode }) {
   };
 
   // If user is not logged in, show a simplified layout without the sidebar.
-  if (!hasAdminAccess) {
+  if (!isLocalAdmin) {
     return (
       <div className="flex min-h-svh flex-col">
         <header className="flex h-14 items-center justify-between border-b bg-card px-4 lg:h-[60px] lg:px-6 relative">
@@ -235,10 +276,7 @@ function AppLayoutContent({ children }: { children: ReactNode }) {
       </Sidebar>
       <SidebarInset>
         <header className="flex h-14 items-center gap-4 border-b bg-card px-4 lg:h-[60px] lg:px-6">
-          <Button variant="outline" size="icon" className="shrink-0 md:hidden">
-            <PanelLeft className="h-5 w-5" />
-            <span className="sr-only">Basculer le menu de navigation</span>
-          </Button>
+          <SidebarTrigger aria-label="Ouvrir ou fermer le menu Admin" className="shrink-0 md:hidden" />
           <div className="w-full flex-1 h-full flex items-center gap-4">
              <div className="h-full py-2 md:hidden">
                <Logo />
