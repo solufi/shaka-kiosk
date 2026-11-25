@@ -46,7 +46,7 @@ function AppLayoutContent({ children }: { children: ReactNode }) {
   const [adminButtonTimeout, setAdminButtonTimeout] = useState<NodeJS.Timeout | null>(null);
 
   // Démarrer le heartbeat service
-  useHeartbeat();
+  useScreenDiagnostic();
 
   useEffect(() => {
     const revealLogin = () => setShowAdminLogin(true);
@@ -252,10 +252,35 @@ function AppLayoutContent({ children }: { children: ReactNode }) {
   );
 }
 
-// Hook pour gérer le heartbeat
-// DISABLED: The Python shaka_heartbeat.py service handles heartbeats correctly.
-// This client-side heartbeat was creating a ghost machine (shaka-publicstorage)
-// because it derived machineId from the browser hostname instead of using shaka-001.
-function useHeartbeat() {
-  // No-op: heartbeat handled by shaka_heartbeat.py systemd service
+// Report the local renderer even when nobody uses the machine.
+function useScreenDiagnostic() {
+  useEffect(() => {
+    if (!['127.0.0.1', 'localhost'].includes(window.location.hostname)) return;
+    let touched = false;
+    let pending = false;
+    function onTouch(event: PointerEvent) {
+      if (event.isTrusted && event.pointerType === 'touch') touched = true;
+    }
+    async function report() {
+      if (pending || document.hidden) return;
+      pending = true;
+      const observed = touched;
+      touched = false;
+      try {
+        const response = await fetch('/api/screen-health', {
+          method: 'POST', headers: {'X-Shaka-Screen': observed ? 'touch' : 'alive'},
+          signal: AbortSignal.timeout(4000),
+        });
+        if (!response.ok) touched ||= observed;
+      } catch { touched ||= observed; }
+      finally { pending = false; }
+    }
+    window.addEventListener('pointerdown', onTouch, true);
+    void report();
+    const timer = setInterval(report, 15000);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('pointerdown', onTouch, true);
+    };
+  }, []);
 }

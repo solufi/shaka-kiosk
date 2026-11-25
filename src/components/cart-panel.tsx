@@ -61,6 +61,7 @@ export interface CartPanelProps {
 type PaymentState =
   | 'idle'
   | 'starting'
+  | 'checking_start'
   | 'waiting'
   | 'approved'
   | 'dispensing'
@@ -97,6 +98,8 @@ function RetailCartPanel({
   const [placeholderImages, setPlaceholderImages] = useState<PlaceholderImage[]>([]);
   const [receiptDismissed, setReceiptDismissed] = useState(false);
   const handledRef = useRef(false);
+  const startingRequest = useRef('');
+  const startingPayment = useRef(false);
   const purchaseIdRef = useRef('');
   const cartSnapshotRef = useRef<CartItem[]>([]);
   // True when the current vend is fully employer-subsidized (total = 0): no
@@ -127,6 +130,8 @@ function RetailCartPanel({
     items.some((item) => item.useRelay);
 
   const resetPayment = useCallback(() => {
+    startingRequest.current = '';
+    startingPayment.current = false;
     setPaymentState('idle');
     setCountdown(PAYMENT_TIMEOUT_SECONDS);
     setPaymentError(null);
@@ -300,6 +305,8 @@ function RetailCartPanel({
     if (testMode.active) {setTestCart([...cartItems]);return;}
     if(funded&&funding?.available===false){setPaymentError('Prise en charge entreprise indisponible');return;}
     if(needsNumber&&!/^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$/.test(employeeNumber.trim())){setNumberOpen(true);return;}
+    if (startingPayment.current) return;
+    startingPayment.current = true;
     freeVendRef.current = total <= 0;
     setPaymentState('starting');
     setPaymentError(null);
@@ -342,6 +349,11 @@ function RetailCartPanel({
     }
     freeVendRef.current = false;
 
+    const requestId = crypto.randomUUID();
+    startingRequest.current = requestId;
+    const slowStart = setTimeout(() => {
+      if (startingRequest.current === requestId) setPaymentState('checking_start');
+    }, 4000);
     try {
       const items = cartItems.map((item) => ({
         productId: item.id,
@@ -359,6 +371,7 @@ function RetailCartPanel({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           items,
+          checkoutRequestId: requestId,
           machineId: MACHINE_ID,
           discountCents: discountCents > 0 ? discountCents : undefined,
           promoCode: appliedPromo?.code,
@@ -367,20 +380,24 @@ function RetailCartPanel({
       });
 
       const data = await res.json();
-      if (!data.ok) {
-        setPaymentError(
-          data.error || 'Erreur lors du démarrage du paiement'
-        );
-        setPaymentState('denied');
+      if (startingRequest.current !== requestId) return;
+      if (!res.ok || !data.ok || !data.session?.session_id) {
+        if (data.startDeclined || (res.status >= 400 && res.status < 500)) {
+          startingRequest.current = '';
+          setPaymentError(data.error || 'Paiement refusé');
+          setPaymentState('denied');
+        } else {
+          setPaymentState('checking_start');
+        }
         return;
       }
-
-      purchaseIdRef.current = data.session?.session_id || purchaseIdRef.current;
+      startingRequest.current = '';
+      purchaseIdRef.current = data.session.session_id;
       setPaymentState('waiting');
-    } catch (error) {
-      console.error('Start payment failed:', error);
-      setPaymentError('Impossible de contacter le terminal');
-      setPaymentState('denied');
+    } catch {
+      if (startingRequest.current === requestId) setPaymentState('checking_start');
+    } finally {
+      clearTimeout(slowStart);
     }
   };
 
@@ -446,6 +463,44 @@ function RetailCartPanel({
   }, [paymentState, onClearCart, resetPayment, receiptDismissed]);
 
   useEffect(() => {
+    if (paymentState !== 'checking_start') return;
+    const requestId = startingRequest.current;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    async function verify() {
+      try {
+        const response = await fetch(`${getVendApiBase()}/stripe/status`, {
+          cache: 'no-store', signal: AbortSignal.timeout(6000),
+        });
+        const status = await response.json();
+        if (!active || startingRequest.current !== requestId) return;
+        const session = status.session;
+        if (response.ok && session?.checkout_request_id === requestId && session.session_id &&
+            !session.recovery_required && !session.settlement_complete && session.settlement_target == null &&
+            ['waiting_payment', 'authorizing', 'payment_authorized'].includes(status.state)) {
+          startingRequest.current = '';
+          purchaseIdRef.current = session.session_id;
+          setPaymentState('waiting');
+          return;
+        }
+        if (response.ok && session?.checkout_request_id === requestId && session.session_id &&
+            !session.recovery_required && ['denied', 'cancelled', 'timeout'].includes(session.payment_result)) {
+          startingRequest.current = '';
+          purchaseIdRef.current = session.session_id;
+          setPaymentError('Le terminal a confirmé la fin du paiement.');
+          setPaymentState('denied');
+          return;
+        }
+      } catch {
+        // A missing response cannot authorize a second payment.
+      }
+      if (active) timer = setTimeout(verify, 2500);
+    }
+    void verify();
+    return () => { active = false; clearTimeout(timer); };
+  }, [paymentState]);
+
+  useEffect(() => {
     if (paymentState !== 'waiting') return;
 
     const countdownInterval = setInterval(() => {
@@ -458,50 +513,36 @@ function RetailCartPanel({
       });
     }, 1000);
 
+    let active = true;
+    let polling = false;
     const pollInterval = setInterval(async () => {
+      if (polling) return;
+      polling = true;
       try {
-        const base = getVendApiBase();
-        const res = await fetch(`${base}/stripe/status`, {
-          cache: 'no-store',
+        const response = await fetch(`${getVendApiBase()}/stripe/status`, {
+          cache: 'no-store', signal: AbortSignal.timeout(6000),
         });
-        if (res.ok) {
-          const data = await res.json();
-          const session = data.session;
-          const state = data.state;
-
-          if (session) {
-            const result = session.payment_result;
-            if (result === 'authorized' || result === 'captured') {
-              setPaymentState('approved');
-              return;
-            } else if (result === 'denied' || result === 'cancelled') {
-              setPaymentError(session.error || 'Paiement refusé');
-              setPaymentState('denied');
-              return;
-            }
-          }
-
-          if (
-            state === 'payment_authorized' ||
-            state === 'session_complete'
-          ) {
-            const result = session?.payment_result;
-            if (result === 'authorized' || result === 'captured') {
-              setPaymentState('approved');
-              return;
-            }
-          } else if (state === 'error') {
-            setPaymentError(session?.error || 'Erreur du terminal');
-            setPaymentState('denied');
-            return;
-          }
+        const data = await response.json();
+        const session = data.session;
+        if (!active || !response.ok || !session || session.session_id !== purchaseIdRef.current) return;
+        if (session.recovery_required || session.settlement_complete || session.settlement_target != null) {
+          setPaymentError('Paiement à vérifier. Veuillez contacter le service client.');
+          setPaymentState('vend_failed');
+        } else if (['authorized', 'captured'].includes(session.payment_result)) {
+          setPaymentState('approved');
+        } else if (['denied', 'cancelled', 'timeout'].includes(session.payment_result) || data.state === 'error') {
+          setPaymentError(session.error || 'Paiement refusé');
+          setPaymentState('denied');
         }
       } catch {
-        // Ignore polling errors
+        // Keep waiting for the status of this purchase.
+      } finally {
+        polling = false;
       }
     }, PAYMENT_POLL_INTERVAL_MS);
 
     return () => {
+      active = false;
       clearInterval(countdownInterval);
       clearInterval(pollInterval);
     };
@@ -521,13 +562,16 @@ function RetailCartPanel({
   return (
     <>
       {testCart && <SimulatedCheckout items={testCart} onDone={()=>{setTestCart(null);onClearCart();resetPayment();}}/>}
-      {paymentState === 'starting' && (
+      {(paymentState === 'starting' || paymentState === 'checking_start') && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
           <div className="flex flex-col items-center gap-6 text-white">
             <Loader2 className="h-24 w-24 animate-spin" />
             <p className="text-3xl font-bold">
-              {freeVendRef.current?'Vérification de la commande gratuite…':'Initialisation du paiement…'}
+              {paymentState === 'checking_start' ? 'Vérification auprès du terminal…' : freeVendRef.current ? 'Vérification de la commande gratuite…' : 'Initialisation du paiement…'}
             </p>
+            {paymentState === 'checking_start' && <p role="status" className="max-w-lg text-center text-xl">
+              Suivez les instructions du lecteur. Si l’attente se prolonge, contactez le service client avant de recommencer.
+            </p>}
           </div>
         </div>
       )}
