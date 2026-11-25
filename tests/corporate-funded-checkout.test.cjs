@@ -29,16 +29,27 @@ test('anonymous company-funded checkout keeps catalog value, dispenses once and 
  assert.equal(f.calls.filter(c=>c.url.endsWith('/vend')).length,1);assert.equal(f.buys(),1);assert.ok(f.calls.every(c=>!c.url.includes('/stripe/')));
 });
 test('tracking mode requires the employee number and submits it without a personal payment',async t=>{
- const f=await setup(t,'employee-number');assert.equal(f.button('Prendre les articles').props.disabled,true);
- await Renderer.act(async()=>f.button('Saisir mon numéro').props.onClick());
+ const f=await setup(t,'employee-number');assert.equal(f.button('Prendre les articles').props.disabled,false);
+ await Renderer.act(async()=>f.button('Prendre les articles').props.onClick());
  await Renderer.act(async()=>f.tree.root.findByProps({'aria-label':'Numéro d’employé',maxLength:40}).props.onChange({target:{value:'001'}}));
- await Renderer.act(async()=>f.button('Utiliser ce numéro').props.onClick());assert.equal(f.button('Prendre les articles').props.disabled,false);
- await Renderer.act(async()=>{await f.button('Prendre les articles').props.onClick();});await waitForReceipt(f);
+ await Renderer.act(async()=>f.button('Confirmer et prendre').props.onClick());await waitForReceipt(f);
  assert.equal(f.calls.find(c=>c.url.endsWith('/purchase/free')).body.employeeNumber,'001');assert.ok(f.calls.every(c=>!c.url.includes('/stripe/')));
 });
 test('unknown employee number fails before requesting distribution',async t=>{
  const f=await setup(t,'employee-number',true);
- await Renderer.act(async()=>f.button('Saisir mon numéro').props.onClick());await Renderer.act(async()=>f.tree.root.findByProps({'aria-label':'Numéro d’employé',maxLength:40}).props.onChange({target:{value:'WRONG'}}));await Renderer.act(async()=>f.button('Utiliser ce numéro').props.onClick());
- await Renderer.act(async()=>{await f.button('Prendre les articles').props.onClick();});assert.ok(JSON.stringify(f.tree.toJSON()).includes('Numéro non reconnu'));
+ await Renderer.act(async()=>f.button('Prendre les articles').props.onClick());await Renderer.act(async()=>f.tree.root.findByProps({'aria-label':'Numéro d’employé',maxLength:40}).props.onChange({target:{value:'WRONG'}}));await Renderer.act(async()=>f.button('Confirmer et prendre').props.onClick());assert.ok(JSON.stringify(f.tree.toJSON()).includes('Numéro non reconnu'));
  assert.equal(f.calls.filter(c=>c.url.endsWith('/vend')).length,0);assert.ok(f.calls.every(c=>!c.url.includes('/stripe/')));
+});
+
+test('cancelling the employee prompt clears the number without starting a purchase',async t=>{
+ const f=await setup(t,'employee-number');
+ const press=async label=>Renderer.act(async()=>f.button(label).props.onClick());
+ await press('Prendre les articles');
+ const input=()=>f.tree.root.findByProps({'aria-label':'Numéro d’employé',maxLength:40});
+ await Renderer.act(async()=>input().props.onChange({target:{value:'001'}}));
+ await press('Annuler');
+ await press('Prendre les articles');
+ assert.equal(input().props.value,'');
+ assert.equal(f.button('Confirmer et prendre').props.disabled,true);
+ assert.ok(f.calls.every(c=>!c.url.endsWith('/purchase/free')&&!c.url.endsWith('/vend')));
 });

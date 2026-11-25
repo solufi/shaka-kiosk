@@ -82,6 +82,7 @@ function RetailCartPanel({
   const testMode = useTestMode();
   const funded=!testMode.active&&funding?.enabled===true;
   const [employeeNumber,setEmployeeNumber]=useState(''),[numberOpen,setNumberOpen]=useState(false);
+  const closeNumberPrompt=()=>{setNumberOpen(false);setEmployeeNumber('');};
   const needsNumber=funded&&funding?.identification==='employee-number';
   const [testCart,setTestCart] = useState<CartItem[] | null>(null);
   const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null);
@@ -90,7 +91,7 @@ function RetailCartPanel({
 
   const [paymentState, setPaymentState] = useState<PaymentState>('idle');
   useEffect(()=>{onBusyChange?.(paymentState!=='idle');return()=>onBusyChange?.(false);},[paymentState,onBusyChange]);
-  useEffect(()=>{if(!cartItems.length){setEmployeeNumber('');setNumberOpen(false);}},[cartItems.length]);
+  useEffect(()=>{if(!cartItems.length||!needsNumber){setEmployeeNumber('');setNumberOpen(false);}},[cartItems.length,needsNumber]);
   const [countdown, setCountdown] = useState(PAYMENT_TIMEOUT_SECONDS);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [doorClosed, setDoorClosed] = useState(false);
@@ -301,10 +302,11 @@ function RetailCartPanel({
     setPaymentState('denied');
   }, []);
 
-  const startPayment = async () => {
+  const startPayment = async (confirmedNumber?:string) => {
+    if (!cartItems.length || paymentState!=='idle' || (confirmedNumber && !needsNumber)) return;
     if (testMode.active) {setTestCart([...cartItems]);return;}
     if(funded&&funding?.available===false){setPaymentError('Prise en charge entreprise indisponible');return;}
-    if(needsNumber&&!/^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$/.test(employeeNumber.trim())){setNumberOpen(true);return;}
+    if(needsNumber&&!/^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$/.test(confirmedNumber||'')){setNumberOpen(true);return;}
     if (startingPayment.current) return;
     startingPayment.current = true;
     freeVendRef.current = total <= 0;
@@ -334,7 +336,7 @@ function RetailCartPanel({
     if (total <= 0) {
       try {
         const response = await fetch(`${getVendApiBase()}/purchase/free`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-          items:cartItems.map(item=>({productId:item.id,price:productSellingCents(item),qty:item.orderQuantity})),promoCode:funded?undefined:appliedPromo?.code,...(funded?{corporateFunded:true,employeeNumber:needsNumber?employeeNumber.trim().toUpperCase():undefined}:{})
+          items:cartItems.map(item=>({productId:item.id,price:productSellingCents(item),qty:item.orderQuantity})),promoCode:funded?undefined:appliedPromo?.code,...(funded?{corporateFunded:true,employeeNumber:needsNumber?confirmedNumber:undefined}:{})
         })});
         const grant=await response.json();
         if(!response.ok || !grant.ok)throw new Error(grant.error || 'Autorisation refusée');
@@ -723,10 +725,10 @@ function RetailCartPanel({
         </div>
       )}
 
-      {numberOpen&&<div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 p-4" role="dialog" aria-modal="true" aria-label="Numéro d’employé" onKeyDown={event=>{
-        if(event.key==='Escape')setNumberOpen(false);
+      {needsNumber&&numberOpen&&<div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 p-4" role="dialog" aria-modal="true" aria-label="Numéro d’employé" onKeyDown={event=>{
+        if(event.key==='Escape')closeNumberPrompt();
         if(event.key==='Tab'){const fields=Array.from(event.currentTarget.querySelectorAll<HTMLElement>('input,button:not([disabled])'));const first=fields[0],last=fields.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}}
-      }}><div className="w-full max-w-4xl space-y-4 rounded-2xl bg-slate-900 p-5 text-white"><h2 className="text-2xl font-semibold">Votre numéro d’employé</h2><p className="text-sm text-slate-300">Il servira uniquement à attribuer les articles à votre numéro pour le suivi de l’entreprise.</p><input autoFocus aria-label="Numéro d’employé" value={employeeNumber} maxLength={40} onChange={e=>setEmployeeNumber(e.target.value.toUpperCase())} className="w-full rounded-xl bg-slate-950 p-3 text-2xl"/><div className="[&_button]:min-w-0 [&_button]:h-11 [&_button]:text-lg"><VirtualKeyboard value={employeeNumber} onChange={value=>setEmployeeNumber(value.slice(0,40).toUpperCase())} uppercase/></div><div className="flex gap-3"><button type="button" onClick={()=>setNumberOpen(false)} className="flex-1 rounded-xl border border-white/20 p-3">Annuler</button><button type="button" disabled={!/^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$/.test(employeeNumber.trim())} onClick={()=>setNumberOpen(false)} className="flex-1 rounded-xl bg-blue-600 p-3 disabled:opacity-50">Utiliser ce numéro</button></div></div></div>}
+      }}><div className="w-full max-w-4xl space-y-4 rounded-2xl bg-slate-900 p-5 text-white"><h2 className="text-2xl font-semibold">Votre numéro d’employé</h2><p className="text-sm text-slate-300">Il servira uniquement à attribuer les articles à votre numéro pour le suivi de l’entreprise.</p><input autoFocus aria-label="Numéro d’employé" value={employeeNumber} maxLength={40} onChange={e=>setEmployeeNumber(e.target.value.toUpperCase())} className="w-full rounded-xl bg-slate-950 p-3 text-2xl"/><div className="[&_button]:min-w-0 [&_button]:h-11 [&_button]:text-lg"><VirtualKeyboard value={employeeNumber} onChange={value=>setEmployeeNumber(value.slice(0,40).toUpperCase())} uppercase/></div><div className="flex gap-3"><button type="button" onClick={closeNumberPrompt} className="flex-1 rounded-xl border border-white/20 p-3">Annuler</button><button type="button" disabled={!/^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$/.test(employeeNumber.trim())} onClick={()=>{closeNumberPrompt();return startPayment(employeeNumber.trim().toUpperCase());}} className="flex-1 rounded-xl bg-blue-600 p-3 disabled:opacity-50">Confirmer et prendre les articles</button></div></div></div>}
       <Card className="sticky top-6 flex h-[calc(100vh-3.5rem-3rem)] max-h-[calc(100vh-3.5rem-3rem)] flex-col">
         <CardHeader>
           <CardTitle>Votre Commande</CardTitle>
@@ -812,7 +814,7 @@ function RetailCartPanel({
                 onRemove={() => setAppliedPromo(null)}
                 disabled={paymentState !== 'idle' || testMode.active}
               />}
-              {funded&&<div className="w-full space-y-2 text-sm"><p>Valeur portée à la facture de l’entreprise : ${subtotal.toFixed(2)}</p>{funding?.available===false&&<p role="alert" className="text-amber-600">Prise en charge suspendue. Veuillez contacter votre responsable.</p>}{needsNumber?<button type="button" disabled={paymentState!=='idle'} onClick={()=>setNumberOpen(true)} className="w-full rounded-lg border p-3">{employeeNumber?`Employé ${employeeNumber} · Modifier mon numéro`:'Saisir mon numéro d’employé'}</button>:<p>Prise suivie sans identification individuelle.</p>}</div>}
+              {funded&&<div className="w-full space-y-2 text-sm"><p>Valeur portée à la facture de l’entreprise : ${subtotal.toFixed(2)}</p>{funding?.available===false&&<p role="alert" className="text-amber-600">Prise en charge suspendue. Veuillez contacter votre responsable.</p>}{needsNumber?<p>Votre numéro d’employé sera demandé à la confirmation.</p>:<p>Prise suivie sans identification individuelle.</p>}</div>}
               {amounts.depositCents>0&&<div className="w-full space-y-1 text-sm"><div className="flex justify-between"><span>Articles</span><span>${(amounts.goodsSubtotalCents/100).toFixed(2)}</span></div><div className="flex justify-between"><span>Consigne (non taxable)</span><span>${(amounts.depositCents/100).toFixed(2)}</span></div></div>}
               {appliedPromo && !funded && (
                 <div className="flex w-full flex-col gap-1 text-sm">
@@ -833,8 +835,8 @@ function RetailCartPanel({
               <Button
                 className="w-full"
                 size="lg"
-                onClick={startPayment}
-                disabled={paymentState !== 'idle'||(funded&&funding?.available===false)||(needsNumber&&!employeeNumber.trim())}
+                onClick={()=>startPayment()}
+                disabled={paymentState !== 'idle'||(funded&&funding?.available===false)}
               >
                 {testMode.active?'Tester le panier':funded?'Prendre les articles · pris en charge':total<=0?'Valider la commande gratuite':'Passer au paiement'}
               </Button>
