@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookie, localRequest, login, adminAuthorized } from '@/lib/local-admin';
+import { cookie, localRequest, login, sessionExpiry, revokeSession } from '@/lib/local-admin';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
@@ -17,9 +17,16 @@ export async function POST(request: NextRequest) {
 
 export function DELETE(request: NextRequest) {
   if (!localRequest(request)) return NextResponse.json({ok:false}, {status:403});
+  revokeSession(request);
   return NextResponse.json({ok:true}, {headers:{'Set-Cookie':cookie(request,''),'Cache-Control':'no-store'}});
 }
 
 export function GET(request: NextRequest) {
-  return NextResponse.json({ok:true,authenticated:adminAuthorized(request)}, {headers:{"Cache-Control":"no-store"}});
+  const expiresAt = sessionExpiry(request);
+  return NextResponse.json({ok:true,authenticated:expiresAt > 0,expiresAt}, {headers:{"Cache-Control":"no-store"}});
+}
+
+export function PUT(request: NextRequest) {
+  const expiresAt = sessionExpiry(request, true);
+  return NextResponse.json({authenticated:expiresAt > 0,expiresAt}, {status:expiresAt ? 200 : 401, headers:{'Cache-Control':'no-store'}});
 }

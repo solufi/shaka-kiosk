@@ -1,7 +1,10 @@
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 
 export const ADMIN_COOKIE = 'shaka_admin';
-const lifetime = 15 * 60;
+const idleMs = 10 * 60 * 1000;
+// Next bundles route handlers separately. They share one kiosk server process.
+const kiosk = globalThis as typeof globalThis & { shakaLocalAdminSessions?: Map<string, number> };
+const sessions = kiosk.shakaLocalAdminSessions ??= new Map<string, number>();
 let failures = 0;
 let blockedUntil = 0;
 
@@ -11,12 +14,6 @@ export function localRequest(request: Request): boolean {
   return /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host) &&
     (!origin || origin === `http://${host}` || origin === `https://${host}`) &&
     request.headers.get('sec-fetch-site') !== 'cross-site';
-}
-
-function signature(value: string): string {
-  const secret = process.env.AGENT_TOKEN;
-  if (!secret) throw new Error('Identité machine non configurée');
-  return createHmac('sha256', secret).update('kiosk-admin:' + value).digest('hex');
 }
 
 export function login(pin: unknown): string {
@@ -30,21 +27,43 @@ export function login(pin: unknown): string {
     throw new Error('Mot de passe incorrect');
   }
   failures = 0;
-  const payload = `${Math.floor(Date.now() / 1000) + lifetime}.${randomBytes(16).toString('hex')}`;
-  return `${payload}.${signature(payload)}`;
+  if (!process.env.AGENT_TOKEN) throw new Error('Identité machine non configurée');
+  const now = Date.now();
+  for (const [key, expiry] of sessions) if (expiry <= now) sessions.delete(key);
+  const token = randomBytes(32).toString('hex');
+  sessions.set(token, now + idleMs);
+  return token;
+}
+
+function requestToken(request: Request): string {
+  if (!localRequest(request)) return '';
+  return request.headers.get('cookie')?.split(';').map(v => v.trim())
+    .find(v => v.startsWith(ADMIN_COOKIE + '='))?.slice(ADMIN_COOKIE.length + 1) ?? '';
+}
+
+export function sessionExpiry(request: Request, activity = false): number {
+  const token = requestToken(request);
+  const expiry = sessions.get(token);
+  if (!expiry) return 0;
+  const now = Date.now();
+  if (expiry <= now) {
+    sessions.delete(token);
+    return 0;
+  }
+  if (!activity) return expiry;
+  const renewed = now + idleMs;
+  sessions.set(token, renewed);
+  return renewed;
 }
 
 export function adminAuthorized(request: Request): boolean {
-  if (!localRequest(request)) return false;
-  const token = request.headers.get('cookie')?.split(';').map(v => v.trim()).find(v => v.startsWith(ADMIN_COOKIE + '='))?.slice(ADMIN_COOKIE.length + 1);
-  if (!token || !/^\d{10}\.[a-f0-9]{32}\.[a-f0-9]{64}$/.test(token)) return false;
-  const [expiry, nonce, signed] = token.split('.');
-  const now = Math.floor(Date.now() / 1000);
-  if (Number(expiry) <= now || Number(expiry) > now + lifetime) return false;
-  try { return timingSafeEqual(Buffer.from(signed, 'hex'), Buffer.from(signature(`${expiry}.${nonce}`), 'hex')); }
-  catch { return false; }
+  return sessionExpiry(request) > 0;
+}
+
+export function revokeSession(request: Request): void {
+  sessions.delete(requestToken(request));
 }
 
 export function cookie(request: Request, value: string): string {
-  return `${ADMIN_COOKIE}=${value}; Path=/api; HttpOnly; SameSite=Strict; Max-Age=${value ? lifetime : 0}${new URL(request.url).protocol === 'https:' ? '; Secure' : ''}`;
+  return `${ADMIN_COOKIE}=${value}; Path=/api; HttpOnly; SameSite=Strict${value ? '' : '; Max-Age=0'}${new URL(request.url).protocol === 'https:' ? '; Secure' : ''}`;
 }

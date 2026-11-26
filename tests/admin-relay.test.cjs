@@ -53,3 +53,26 @@ test('row test accepts only a signed local admin session and a single slot',asyn
  const proxy=loader(root,{AGENT_TOKEN:'private-agent-test'}).load('src/app/api/machine/[...path]/route.ts');
  assert.equal((await proxy.POST({...x.request(command),method:'POST'},{params:Promise.resolve({path:['admin','vend-test']})})).status,404);
 });
+
+test('admin polling cannot prolong access, a touch extends it, and neither expiry nor logout can be undone by a late touch',async()=>{
+ const x=setup();
+ const clock=Date.now;
+ let now=clock();
+ try{
+   Date.now=()=>now;
+   const cookie=await x.login(),req=x.request({},{cookie});
+   const status=()=>x.session.GET(req).body;
+   const start=now;
+   now+=9*60000;
+   assert.equal(status().expiresAt,start+600000);
+   assert.equal(x.session.PUT(req).body.expiresAt,now+600000);
+   now+=600000-1;
+   assert.equal(status().authenticated,true);
+   now++;
+   assert.equal(status().authenticated,false);
+   assert.equal(x.session.PUT(req).status,401);
+   const next=x.request({},{cookie:await x.login()});
+   x.session.DELETE(next);
+   assert.equal(x.session.PUT(next).status,401);
+ }finally{Date.now=clock;}
+});

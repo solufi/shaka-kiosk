@@ -83,7 +83,7 @@ for (const approved of [true,false]) test('kiosk cart through reader result and 
     'next/link':({children,...props})=>React.createElement('a',props,children),
     '@/components/ui/button':{Button:stubButton},
     '@/components/ui/input':{Input:props=>React.createElement('input',props)}
-  },globals).load('src/app/essais/page.tsx').default;
+  },globals).load('src/app/(app)/essais/page.tsx').default;
   let ui;const act=Renderer.act;
   await act(async()=>{ui=Renderer.create(React.createElement(page));});
   t.after(()=>act(()=>ui.unmount()));

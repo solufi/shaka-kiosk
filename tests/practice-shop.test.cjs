@@ -37,7 +37,7 @@ for (const authenticated of [false,true]) test('practice screen uses only the ad
     '@/components/ui/button':{Button:button},
     '@/components/ui/input':{Input:props=>React.createElement('input',props)},
   },{window:{addEventListener(){},removeEventListener(){}},fetch:async url=>{requests.push(url);return {ok:true,json:async()=>({authenticated})};}});
-  const Page=instance.load('src/app/essais/page.tsx').default;
+  const Page=instance.load('src/app/(app)/essais/page.tsx').default;
   let ui;await Renderer.act(async()=>{ui=Renderer.create(React.createElement(Page));});
   t.after(()=>Renderer.act(()=>ui.unmount()));
   const controls=()=>ui.root.findAllByType('button');

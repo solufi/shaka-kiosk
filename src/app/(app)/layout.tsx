@@ -1,7 +1,7 @@
 'use client';
 import type { ReactNode } from 'react';
 import { TestModeProvider, TestModeButton } from '@/components/test-mode';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { flushRedemptions } from '@/lib/corporate-queue';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -42,6 +42,7 @@ function AppLayoutContent({ children }: { children: ReactNode }) {
   const [access, setAccess] = useState<'checking' | 'customer' | 'admin'>('checking');
   const [logoutState, setLogoutState] = useState<'idle' | 'pending' | 'failed'>('idle');
   const exiting = useRef(false);
+  const [expiresAt, setExpiresAt] = useState(0);
   const isLocalAdmin = access === 'admin';
   
   const [adminClickCount, setAdminClickCount] = useState(0);
@@ -93,7 +94,7 @@ function AppLayoutContent({ children }: { children: ReactNode }) {
     }
   };
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async (automatic = false) => {
     if (exiting.current && logoutState !== 'failed') return;
     exiting.current = true;
     setAccess('customer');
@@ -110,14 +111,16 @@ function AppLayoutContent({ children }: { children: ReactNode }) {
       });
       if (!response.ok || (await response.json()).ok !== true) throw new Error();
     } catch {
-      setLogoutState('failed');
-      return;
+      if (!automatic) {
+        setLogoutState('failed');
+        return;
+      }
     }
     try {
       window.sessionStorage.setItem('shaka:lastAdminLogout', Date.now().toString());
     } catch { /* Navigation also works without browser storage. */ }
     window.location.replace('/');
-  };
+  }, [logoutState]);
 
   // Cleanup timeout on component unmount
   useEffect(() => {
@@ -133,22 +136,30 @@ function AppLayoutContent({ children }: { children: ReactNode }) {
     async function verify() {
       const check = ++currentCheck;
       if (exiting.current) return;
+      let markedAdmin = false;
       try {
-        if (window.localStorage.getItem('shaka:isAdmin') === '1') {
+        markedAdmin = window.localStorage.getItem('shaka:isAdmin') === '1';
+        if (markedAdmin) {
           setAccess('checking');
           const response = await fetch('/api/admin/session', {
             cache: 'no-store', signal: AbortSignal.timeout(5000),
           });
-          const authenticated = response.ok && (await response.json()).authenticated === true;
+          const session = response.ok ? await response.json() : null;
           if (check !== currentCheck || exiting.current) return;
-          if (authenticated) {
+          if (session?.authenticated && Number.isFinite(session.expiresAt) && session.expiresAt > Date.now()) {
+            setExpiresAt(session.expiresAt);
             setAccess('admin');
             return;
           }
-          window.localStorage.removeItem('shaka:isAdmin');
-          window.dispatchEvent(new Event('shaka-admin-changed'));
+          void handleLogout(true);
+          return;
         }
-      } catch { /* Return to customer mode if the local session cannot be verified. */ }
+      } catch {
+        if (markedAdmin && check === currentCheck && !exiting.current) {
+          void handleLogout(true);
+          return;
+        }
+      }
       if (check === currentCheck && !exiting.current) setAccess('customer');
     }
     function onStorage(event: StorageEvent) {
@@ -164,20 +175,76 @@ function AppLayoutContent({ children }: { children: ReactNode }) {
       window.removeEventListener('storage', onStorage);
       window.removeEventListener('shaka-admin-changed', verify);
     };
-  }, [pathname]);
+  }, [pathname, handleLogout]);
 
-  const isDashboard = pathname === '/dashboard';
   useEffect(() => {
-    if (isDashboard && access === 'customer' && !exiting.current) window.location.replace('/');
-  }, [isDashboard, access]);
+    if (access !== 'admin') return;
+    let active = true;
+    // The Pi supplies the deadline. Refreshing the page or polling a diagnostic
+    // never gives the next customer another ten minutes of access.
+    const expire = () => { if (active) void handleLogout(true); };
+    let deadline = expiresAt;
+    let timer = setTimeout(expire, Math.max(0, deadline - Date.now()));
+    let renewing = false;
+    let moreInput = false;
+    async function renew() {
+      moreInput = true;
+      if (renewing) return;
+      renewing = true;
+      try {
+        while (moreInput && active && !exiting.current) {
+          moreInput = false;
+          const res = await fetch('/api/admin/session', {
+            method: 'PUT', cache: 'no-store', signal: AbortSignal.timeout(5000),
+          });
+          if (!active || exiting.current) return;
+          if (res.status === 401) { expire(); return; }
+          const next = res.ok && (await res.json()).expiresAt;
+          if (active && !exiting.current && Number.isFinite(next)) {
+            deadline = next;
+            clearTimeout(timer);
+            timer = setTimeout(expire, Math.max(0, deadline - Date.now()));
+          }
+        }
+      } catch { /* Keep the last deadline confirmed by the Pi. */ }
+      finally { renewing = false; }
+    }
+    function onInput(event: Event) {
+      if (!event.isTrusted || exiting.current) return;
+      if (Date.now() >= deadline) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        expire();
+        return;
+      }
+      void renew();
+    }
+    const checkDeadline = () => { if (Date.now() >= deadline) expire(); };
+    window.addEventListener('focus', checkDeadline);
+    window.addEventListener('pointerdown', onInput, true);
+    window.addEventListener('keydown', onInput, true);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+      window.removeEventListener('focus', checkDeadline);
+      window.removeEventListener('pointerdown', onInput, true);
+      window.removeEventListener('keydown', onInput, true);
+    };
+  }, [access, expiresAt, handleLogout]);
+
+  const adminPage = pathname === '/dashboard' || pathname === '/essais';
+  useEffect(() => {
+    if (adminPage && access === 'customer' && !exiting.current) window.location.replace('/');
+  }, [adminPage, access]);
 
   if (logoutState !== 'idle') {
     return <main className="grid min-h-svh place-content-center gap-4 text-center">
       <p role="status">{logoutState === 'pending' ? 'Déconnexion…' : 'La déconnexion doit être confirmée par la machine.'}</p>
-      {logoutState === 'failed' && <Button onClick={handleLogout}>Réessayer la déconnexion</Button>}
+      {logoutState === 'failed' && <Button onClick={() => void handleLogout()}>Réessayer la déconnexion</Button>}
     </main>;
   }
-  if (isDashboard && !isLocalAdmin) return null;
+  if (adminPage && !isLocalAdmin) return null;
+  if (pathname === '/essais') return <>{children}</>;
 
   const handleNavClick = (href: string) => (e: React.MouseEvent) => {
     // On Pi kiosk we prefer a full reload when returning to '/', to avoid
@@ -265,7 +332,7 @@ function AppLayoutContent({ children }: { children: ReactNode }) {
           {isLocalAdmin ? (
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton onClick={handleLogout} tooltip="Se déconnecter">
+                <SidebarMenuButton onClick={() => void handleLogout()} tooltip="Se déconnecter">
                   <LogOut />
                   <span>Se déconnecter</span>
                 </SidebarMenuButton>
