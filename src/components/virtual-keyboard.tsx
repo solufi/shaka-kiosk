@@ -8,6 +8,7 @@ interface VirtualKeyboardProps {
   onChange: (value: string) => void;
   /** Show only email-relevant keys (letters, digits, @ . _ -) */
   emailMode?: boolean;
+  passwordMode?: boolean;
   /** Force every letter to uppercase (e.g. promo codes); hides the shift key */
   uppercase?: boolean;
 }
@@ -22,9 +23,11 @@ export function VirtualKeyboard({
   value,
   onChange,
   emailMode = false,
+  passwordMode = false,
   uppercase = false,
 }: VirtualKeyboardProps) {
   const [shift, setShift] = useState(false);
+  const [symbols, setSymbols] = useState(false);
   const upper = uppercase || shift;
 
   const press = (key: string) => {
@@ -54,9 +57,9 @@ export function VirtualKeyboard({
 
   return (
     <div className="flex w-full flex-col gap-2 rounded-xl bg-slate-800 p-3 shadow-2xl">
-      <div className="flex gap-2">{ROW1.map(renderKey)}</div>
-      <div className="flex gap-2">{ROW2.map(renderKey)}</div>
-      <div className="flex gap-2 px-6">{ROW3.map(renderKey)}</div>
+      <div className="flex gap-2">{(symbols ? Array.from('!@#$%^&*()') : ROW1).map(renderKey)}</div>
+      <div className="flex gap-2">{(symbols ? Array.from('[]{}<>/\\|~') : ROW2).map(renderKey)}</div>
+      <div className="flex gap-2 px-6">{(symbols ? Array.from(".:,;'\"?") : ROW3).map(renderKey)}</div>
       <div className="flex gap-2">
         {!uppercase && (
           <button
@@ -67,7 +70,7 @@ export function VirtualKeyboard({
             <ArrowUp className="h-5 w-5" />
           </button>
         )}
-        {ROW4.map(renderKey)}
+        {(symbols ? Array.from('-_+=`') : ROW4).map(renderKey)}
         <button
           type="button"
           onClick={backspace}
@@ -78,7 +81,8 @@ export function VirtualKeyboard({
         </button>
       </div>
       <div className="flex gap-2">
-        {SYMBOLS.map(renderKey)}
+        {passwordMode && <button type="button" className={wideKeyClass} onClick={()=>setSymbols(!symbols)}>{symbols?'ABC':'#+='}</button>}
+        {!symbols && SYMBOLS.map(renderKey)}
         {!emailMode && (
           <button
             type="button"

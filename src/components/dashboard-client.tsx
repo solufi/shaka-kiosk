@@ -19,6 +19,7 @@ import { salesData } from '@/lib/data';
 import { ChartContainer } from '@/components/ui/chart';
 import { MachineLayoutSelector } from '@/components/machine-layout-selector';
 import { AddProductDialog } from '@/components/add-product-dialog';
+import { WifiPanel } from './wifi-panel';
 import { CameraPanel } from '@/components/camera-panel';
 import { HeartbeatConfig } from '@/components/heartbeat-config';
 import { ProximityStats } from '@/components/proximity-stats';
@@ -376,6 +377,7 @@ export function DashboardClient() {
 
   return (
     <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
+      <WifiPanel/>
       <Card className="lg:col-span-2">
         <CardHeader>
           <CardTitle>Mode test</CardTitle>
