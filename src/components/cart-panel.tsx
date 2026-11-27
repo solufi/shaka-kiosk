@@ -93,6 +93,7 @@ function RetailCartPanel({
   useEffect(()=>{onBusyChange?.(paymentState!=='idle');return()=>onBusyChange?.(false);},[paymentState,onBusyChange]);
   useEffect(()=>{if(!cartItems.length||!needsNumber){setEmployeeNumber('');setNumberOpen(false);}},[cartItems.length,needsNumber]);
   const [countdown, setCountdown] = useState(PAYMENT_TIMEOUT_SECONDS);
+  const [readerLocation, setReaderLocation] = useState('');
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [doorClosed, setDoorClosed] = useState(false);
   const [dispensingItem, setDispensingItem] = useState<string>('');
@@ -383,6 +384,12 @@ function RetailCartPanel({
 
       const data = await res.json();
       if (startingRequest.current !== requestId) return;
+      if (data.readerUnavailable) {
+        startingRequest.current = '';
+        setPaymentError(data.error || 'Terminal occupé. Réessayez dans un instant.');
+        setPaymentState('idle');
+        return;
+      }
       if (!res.ok || !data.ok || !data.session?.session_id) {
         if (data.startDeclined || (res.status >= 400 && res.status < 500)) {
           startingRequest.current = '';
@@ -395,6 +402,7 @@ function RetailCartPanel({
       }
       startingRequest.current = '';
       purchaseIdRef.current = data.session.session_id;
+      setReaderLocation(data.session.reader_location || '');
       setPaymentState('waiting');
     } catch {
       if (startingRequest.current === requestId) setPaymentState('checking_start');
@@ -482,6 +490,7 @@ function RetailCartPanel({
             ['waiting_payment', 'authorizing', 'payment_authorized'].includes(status.state)) {
           startingRequest.current = '';
           purchaseIdRef.current = session.session_id;
+          setReaderLocation(session.reader_location || '');
           setPaymentState('waiting');
           return;
         }
@@ -583,7 +592,7 @@ function RetailCartPanel({
           <div className="flex flex-col items-center gap-6 text-white">
             <ArrowRight className="h-32 w-32 animate-pulse" />
             <p className="text-3xl font-bold">Présentez votre carte</p>
-            <p className="text-xl">au terminal de paiement</p>
+            <p className="text-xl">{readerLocation ? `au terminal fixé sur ${readerLocation}` : 'au terminal de paiement'}</p>
             <div className="mt-4 flex items-center gap-3">
               <Loader2 className="h-8 w-8 animate-spin" />
               <span className="text-4xl font-mono font-bold">
@@ -807,6 +816,7 @@ function RetailCartPanel({
           <>
             <Separator />
             <CardFooter className="flex flex-col gap-3 p-4">
+              {paymentState==='idle' && paymentError && <p role="alert" className="w-full text-sm text-destructive">{paymentError}</p>}
               {!funded&&<PromoInput
                 machineId={MACHINE_ID}
                 applied={appliedPromo}
