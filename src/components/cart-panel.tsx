@@ -184,24 +184,14 @@ function RetailCartPanel({
         setDispensingItem(item.name);
 
         try {
-          const vendPayload: Record<string, any> = {
+          const vendPayload = {
             machineId: MACHINE_ID,
             productId: item.id,
             commandId: `${purchaseIdRef.current}:${item.id}:${q}`,
             sessionId: purchaseIdRef.current,
             free: freeVendRef.current,
-            useRelay: item.useRelay || false,
+            location: item.location,
           };
-
-          if (item.useRelay) {
-            vendPayload.useRelay = true;
-          } else if (item.location) {
-            vendPayload.location = item.location;
-          } else {
-            allDropsOk = false;
-            vendError = `Aucun emplacement configuré pour ${item.name}`;
-            continue;
-          }
 
           const res = await fetch(`${base}/vend`, {
             method: 'POST',
@@ -211,22 +201,14 @@ function RetailCartPanel({
 
           const result = await res.json();
 
-          if (item.useRelay) {
-            if (!result.ok) {
-              allDropsOk = false;
-              vendError = `Erreur distributeur: ${item.name}`;
-            }
+          if (result.ok && result.dropDetected === true) {
+            deliveredQuantity++;
           } else {
-            if (!result.ok || result.dropDetected !== true) {
-              allDropsOk = false;
-              if (result.dropDetected === false) {
-                vendError = freeVendRef.current?`Produit non détecté : ${item.name}. Aucun paiement effectué.`:`Produit non détecté : ${item.name}. Le paiement sera vérifié.`;
-              } else {
-                vendError = `Erreur distributeur: ${item.name}`;
-              }
-            }
+            allDropsOk = false;
+            vendError = result.dropDetected === false
+              ? `Produit non détecté : ${item.name}. ${freeVendRef.current ? 'Aucun paiement effectué.' : 'Le paiement sera vérifié.'}`
+              : `Erreur distributeur: ${item.name}`;
           }
-          if (result.ok && result.dropDetected === true) deliveredQuantity++;
         } catch (err) {
           allDropsOk = false;
           vendError = `Erreur de communication: ${item.name}`;
@@ -309,6 +291,11 @@ function RetailCartPanel({
   const startPayment = async (confirmedNumber?:string) => {
     if (!cartItems.length || paymentState!=='idle' || (confirmedNumber && !needsNumber)) return;
     if (testMode.active) {setTestCart([...cartItems]);return;}
+    const unrouted = cartItems.find(item => !item.useRelay && !item.location?.trim());
+    if (unrouted) {
+      setPaymentError(`Emplacement à configurer pour ${unrouted.name}. Retirez cet article pour continuer.`);
+      return;
+    }
     if(funded&&funding?.available===false){setPaymentError('Prise en charge entreprise indisponible');return;}
     if(needsNumber&&!/^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$/.test(confirmedNumber||'')){setNumberOpen(true);return;}
     if (startingPayment.current) return;
@@ -340,7 +327,7 @@ function RetailCartPanel({
     if (total <= 0) {
       try {
         const response = await fetch(`${getVendApiBase()}/purchase/free`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-          items:cartItems.map(item=>({productId:item.id,price:productSellingCents(item),qty:item.orderQuantity})),promoCode:funded?undefined:appliedPromo?.code,...(funded?{corporateFunded:true,employeeNumber:needsNumber?confirmedNumber:undefined}:{})
+          items:cartItems.map(item=>({productId:item.id,price:productSellingCents(item),qty:item.orderQuantity,useRelay:!!item.useRelay})),promoCode:funded?undefined:appliedPromo?.code,...(funded?{corporateFunded:true,employeeNumber:needsNumber?confirmedNumber:undefined}:{})
         })});
         const grant=await response.json();
         if(!response.ok || !grant.ok)throw new Error(grant.error || 'Autorisation refusée');
