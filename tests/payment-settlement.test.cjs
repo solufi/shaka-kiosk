@@ -22,3 +22,16 @@ test('timeout and transport failure preserve the review requirement',async()=>{
  await assert.rejects(api().settlePayment('','s1',()=>{},async()=>{calls++;throw Error('Response lost');}),/Response lost/);
  assert.equal(calls,1);
 });
+test('the refund screen uses the bank difference in both languages until the card is read',async()=>{
+ const session={refund_amount:199,is_interac:true,reader_location:'machine de gauche'};
+ const results=[{ok:true,pending:true,session},{ok:true,pending:true,session:{...session,refund_card_presented:true}},{ok:true,pending:false,session:{...session,settlement_complete:true}}];
+ const messages=[];
+ const result=await api().settlePayment('','s1',msg=>messages.push(msg),async()=>reply(results.shift()),()=>0,async()=>{});
+ assert.match(messages[0],/1,99 \$/);assert.match(messages[0],/\$1\.99/);
+ assert.match(messages[0],/carte utilisée/);assert.match(messages[0],/card you used/);
+ assert.match(messages[0],/machine de gauche/);assert.match(messages[0],/to your left/);
+ assert.match(messages[1],/being processed/);assert.doesNotMatch(messages[1],/again/);
+ assert.match(api().refundMessage(result.session),/Refund of \$1\.99 confirmed/);
+ assert.doesNotMatch(api().refundMessage({refund_amount:448,is_interac:false}),/again/);
+ assert.equal(api().refundMessage({refund_amount:0}),'');
+});

@@ -1,5 +1,5 @@
 'use client';
-import { settlePayment } from '@/lib/payment-settlement';
+import { refundMessage, settlePayment } from '@/lib/payment-settlement';
 import {cartPricing,productSellingCents,productDepositCents} from '@/lib/cart-pricing';
 import { ProductPhoto } from './product-photo';
 import { useTestMode } from './test-mode';
@@ -99,6 +99,7 @@ function RetailCartPanel({
   const ReaderArrow = readerIsOnLeft ? ArrowLeft : ArrowRight;
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [doorClosed, setDoorClosed] = useState(false);
+  const [settlementMessage, setSettlementMessage] = useState('');
   const [dispensingItem, setDispensingItem] = useState<string>('');
   const [placeholderImages, setPlaceholderImages] = useState<PlaceholderImage[]>([]);
   const [receiptDismissed, setReceiptDismissed] = useState(false);
@@ -142,6 +143,7 @@ function RetailCartPanel({
     setPaymentError(null);
     setDoorClosed(false);
     setDispensingItem('');
+    setSettlementMessage('');
     setReceiptDismissed(false);
     setAppliedPromo(null);
     handledRef.current = false;
@@ -256,9 +258,11 @@ function RetailCartPanel({
     // A free vend has no Stripe Terminal session to capture/cancel.
     if (!freeVendRef.current) {
       try {
-        await settlePayment(base, purchaseIdRef.current, setDispensingItem);
+        const settled = await settlePayment(base, purchaseIdRef.current, setSettlementMessage);
+        setSettlementMessage(refundMessage(settled.session));
       } catch (err) {
-        setPaymentError('Votre paiement doit être vérifié. Veuillez contacter le service client.');
+        setSettlementMessage('');
+        setPaymentError('Votre paiement doit être vérifié. Veuillez contacter le service client. / Your payment needs to be checked. Please contact customer service.');
         setPaymentState('vend_failed');
         return;
       }
@@ -615,8 +619,9 @@ function RetailCartPanel({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
           <div className="flex flex-col items-center gap-6 text-white">
             <Package className="h-24 w-24 animate-pulse text-blue-400" />
-            <p className="text-3xl font-bold">Distribution en cours...</p>
-            {dispensingItem && (
+            <p className="text-3xl font-bold">{settlementMessage ? 'Règlement / Payment' : 'Distribution en cours...'}</p>
+            {settlementMessage && <p role="status" className="max-w-3xl whitespace-pre-line px-6 text-center text-2xl leading-relaxed">{settlementMessage}</p>}
+            {!settlementMessage && dispensingItem && (
               <p className="text-xl text-white/80">{dispensingItem}</p>
             )}
             <Loader2 className="h-10 w-10 animate-spin text-blue-400 mt-4" />
@@ -693,14 +698,14 @@ function RetailCartPanel({
             <p className="text-3xl font-bold text-orange-400">
               Distribution échouée
             </p>
-            {paymentError && (
+            {!settlementMessage && paymentError && (
               <p className="text-xl text-center text-orange-300 max-w-lg">
                 {paymentError}
               </p>
             )}
             <div className="mt-4 rounded-2xl bg-green-900/40 px-8 py-4 border border-green-600">
-              <p className="text-xl font-semibold text-green-400 text-center">
-                {freeVendRef.current?'Aucun paiement n’a été effectué.':'Le statut de votre paiement sera vérifié'}
+              <p className="text-xl font-semibold text-green-400 text-center whitespace-pre-line">
+                {settlementMessage || (freeVendRef.current?'Aucun paiement n’a été effectué.':'Le statut de votre paiement sera vérifié')}
               </p>
             </div>
             <p className="text-lg text-white/60 mt-2">

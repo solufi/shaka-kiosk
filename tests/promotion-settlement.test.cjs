@@ -7,7 +7,8 @@ let callback;function visit(node){if(ts.isVariableDeclaration(node)&&node.name.g
 const code=ts.transpileModule('module.exports='+ts.createPrinter().printNode(ts.EmitHint.Expression,callback,source),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
 function fixture(overrides={}){
  const states=[],redemptions=[],settlements=[];
- const context={module:{exports:{}},cartItems:[{id:'p',name:'Audit fixture',price:10,orderQuantity:1,location:'10'}],appliedPromo:{kind:'corporate',code:'AUDIT',discountValue:50},subtotal:10,
+ const {refundMessage}=require('./loader.cjs').loader(root).load('src/lib/payment-settlement.ts');
+ const context={refundMessage,setSettlementMessage(){},module:{exports:{}},cartItems:[{id:'p',name:'Audit fixture',price:10,orderQuantity:1,location:'10'}],appliedPromo:{kind:'corporate',code:'AUDIT',discountValue:50},subtotal:10,
  handledRef:{current:false},cartSnapshotRef:{current:[]},purchaseIdRef:{current:'audit-session'},freeVendRef:{current:false},MACHINE_ID:'audit',hasRelayItem:()=>false,getVendApiBase:()=>'/fixture',
  setPaymentState:s=>states.push(s),setDispensingItem(){},setDoorClosed(){},setPaymentError(){},onPurchase(){},
  fetch:async()=>({ok:true,json:async()=>({ok:true,dropDetected:true})}),
