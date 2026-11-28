@@ -13,6 +13,7 @@ import { Separator } from '@/components/ui/separator';
 import {
   ArrowDown,
   ArrowUp,
+  ArrowLeft,
   ArrowRight,
   MinusCircle,
   PlusCircle,
@@ -94,6 +95,8 @@ function RetailCartPanel({
   useEffect(()=>{if(!cartItems.length||!needsNumber){setEmployeeNumber('');setNumberOpen(false);}},[cartItems.length,needsNumber]);
   const [countdown, setCountdown] = useState(PAYMENT_TIMEOUT_SECONDS);
   const [readerLocation, setReaderLocation] = useState('');
+  const readerIsOnLeft = /\bgauche\b/i.test(readerLocation);
+  const ReaderArrow = readerIsOnLeft ? ArrowLeft : ArrowRight;
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [doorClosed, setDoorClosed] = useState(false);
   const [dispensingItem, setDispensingItem] = useState<string>('');
@@ -590,9 +593,9 @@ function RetailCartPanel({
       {paymentState === 'waiting' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
           <div className="flex flex-col items-center gap-6 text-white">
-            <ArrowRight className="h-32 w-32 animate-pulse" />
+            <ReaderArrow aria-hidden="true" className="h-32 w-32 animate-pulse" />
             <p className="text-3xl font-bold">Présentez votre carte</p>
-            <p className="text-xl">{readerLocation ? `au terminal fixé sur ${readerLocation}` : 'au terminal de paiement'}</p>
+            <p className="text-xl">{readerLocation ? `au lecteur de paiement sur ${readerLocation}` : 'au terminal de paiement'}</p>
             <div className="mt-4 flex items-center gap-3">
               <Loader2 className="h-8 w-8 animate-spin" />
               <span className="text-4xl font-mono font-bold">
@@ -609,8 +612,8 @@ function RetailCartPanel({
               Annuler
             </button>
           </div>
-          <div className="absolute top-8 right-8">
-            <ArrowRight className="h-24 w-24 text-white animate-bounce" />
+          <div className={`absolute top-8 ${readerIsOnLeft ? 'left-8' : 'right-8'}`}>
+            <ReaderArrow aria-hidden="true" className="h-24 w-24 text-white animate-bounce" />
           </div>
         </div>
       )}

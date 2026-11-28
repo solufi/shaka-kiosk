@@ -1,6 +1,6 @@
 const test=require('node:test'),assert=require('node:assert/strict'),path=require('node:path');
 const React=require('react'),Renderer=require('react-test-renderer'),{loader}=require('./loader.cjs'),root=path.resolve(__dirname,'..');
-const wrapper=tag=>({children,...props})=>React.createElement(tag,props,children),icons=new Proxy({},{get:()=>wrapper('svg')});
+const wrapper=tag=>({children,...props})=>React.createElement(tag,props,children),icons=new Proxy({},{get:(_,name)=>props=>React.createElement('svg',{'data-icon':name,...props})});
 const text=node=>typeof node==='string'?node:Array.isArray(node)?node.map(text).join(''):node?.props?text(node.props.children):'';
 async function mount(t,active, {price = 0, terminal} = {}){
  const calls=[];let purchases=0,clears=0;
@@ -23,6 +23,20 @@ test('admin simulation never enters physical dispensing or payment, and only cle
  await Renderer.act(async()=>{x.button('Terminer le test').props.onClick();});assert.equal(x.purchases(),0);assert.equal(x.clears(),1);
 });
 
+test('a reserved reader shows its location and directional arrow on the first payment prompt', async t => {
+  for (const [location, icon] of [['la machine de gauche', 'ArrowLeft'], ['Station Shaka-PS', 'ArrowRight']]) {
+    await t.test(location, async t => {
+      const session = {session_id:'session-test', reader_location:location};
+      const terminal = async () => ({ok:true, json:async()=>({ok:true, session})});
+      const x = await mount(t, false, {price:1, terminal});
+      await Renderer.act(async()=>{await x.button('Passer au paiement').props.onClick();});
+      assert.ok(JSON.stringify(x.tree.toJSON()).includes('au lecteur de paiement sur '+location));
+      assert.equal(x.tree.root.findAllByProps({'data-icon':icon}).length,2);
+      assert.equal(x.tree.root.findAllByProps({'data-icon':icon==='ArrowLeft'?'ArrowRight':'ArrowLeft'}).length,0);
+    });
+  }
+});
+
 test('a lost start response recovers only the matching terminal session, without issuing a second payment', async t => {
   let requestId, matching = false;
   const terminal = async (url, body) => {
@@ -33,7 +47,7 @@ test('a lost start response recovers only the matching terminal session, without
     assert.ok(url.endsWith('/status'));
     return {ok:true, json:async () => ({
       state:'waiting_payment',
-      session:{checkout_request_id: matching ? requestId : 'another-request', session_id:'session-test', payment_result:'pending'},
+      session:{checkout_request_id: matching ? requestId : 'another-request', session_id:'session-test', payment_result:'pending',reader_location:'la machine de gauche'},
     })};
   };
   const x = await mount(t, false, {price:1, terminal});
@@ -43,6 +57,8 @@ test('a lost start response recovers only the matching terminal session, without
   matching = true;
   await Renderer.act(async () => { await new Promise(resolve => setTimeout(resolve, 2700)); });
   assert.match(JSON.stringify(x.tree.toJSON()), /Présentez votre carte/);
+  assert.match(JSON.stringify(x.tree.toJSON()), /au lecteur de paiement sur la machine de gauche/);
+  assert.equal(x.tree.root.findAllByProps({'data-icon':'ArrowLeft'}).length,2);
   assert.equal(x.calls.filter(c => c.url.endsWith('/pay')).length, 1);
   assert.equal(x.calls.filter(c => c.url.endsWith('/vend')).length, 0);
 });
