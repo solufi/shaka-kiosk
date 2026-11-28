@@ -8,7 +8,7 @@ const icons=new Proxy({},{get:()=>wrapper('svg')});
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 
 test('zero-price fridge checkout retains its purchase identity through closing and emailing the receipt',async t=>{
- const calls=[];let clears=0;
+ const calls=[];let clears=0, polls=0;
  const reply=body=>({ok:true,status:200,json:async()=>body});
  const fetch=async(url,options={})=>{
   const body=options.body?JSON.parse(options.body):undefined;calls.push({url,body});
@@ -16,7 +16,10 @@ test('zero-price fridge checkout retains its purchase identity through closing a
   if(url==='/api/placeholder-images')return reply([]);
   if(url.endsWith('/purchase/free'))return reply({ok:true,sessionId:'free-fridge-123'});
   if(url.endsWith('/fridge/access'))return reply({ok:true,pending:true});
-  if(url.endsWith('/fridge/status'))return reply({ok:true,accessCompleted:true});
+  if(url.endsWith('/fridge/status')){
+   polls++;
+   return reply(polls<=2 ? {ok:true,pending:true,phase:polls===1?'awaiting_open':'awaiting_close'} : {ok:true,accessCompleted:true});
+  }
   if(url.endsWith('/receipt/send'))return reply({ok:true});
   throw Error('Unexpected request: '+url);
  };
@@ -41,7 +44,14 @@ test('zero-price fridge checkout retains its purchase identity through closing a
  const button=label=>tree.root.findAllByType('button').find(n=>text(n).includes(label));
  await Renderer.act(async()=>{await button('Valider la commande gratuite').props.onClick();});
  const deadline=Date.now()+6000;
- while(!tree.root.findAllByType(ReceiptPrompt).length && Date.now()<deadline){await Renderer.act(async()=>{await delay(100);});}
+ const prompts=new Set();
+ while(!tree.root.findAllByType(ReceiptPrompt).length && Date.now()<deadline){
+  await Renderer.act(async()=>{await delay(100);});
+  for(const p of tree.root.findAllByProps({role:'status'}))prompts.add(text(p));
+ }
+ assert.ok(prompts.has('Ouvrez la porte du frigo et prenez vos articles.'));
+ assert.ok(prompts.has('Refermez la porte du frigo pour terminer.'));
+ assert.equal(calls.filter(c=>c.url.endsWith('/fridge/access')).length,1);
  assert.equal(tree.root.findAllByType(ReceiptPrompt).length,1,'Receipt offered after a confirmed door cycle');
  assert.equal(clears,0,'Cart must survive until the receipt question is answered');
  assert.equal(calls.filter(c=>c.url.endsWith('/stripe/pay')).length,0);

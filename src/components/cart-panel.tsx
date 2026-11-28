@@ -1,5 +1,6 @@
 'use client';
 import { refundMessage, settlePayment } from '@/lib/payment-settlement';
+import { fridgeInstructions } from '@/lib/fridge-instructions';
 import {cartPricing,productSellingCents,productDepositCents} from '@/lib/cart-pricing';
 import { ProductPhoto } from './product-photo';
 import { useTestMode } from './test-mode';
@@ -224,7 +225,7 @@ function RetailCartPanel({
 
     const fridgeItems = cartItems.filter(item => item.useRelay);
     if (allDropsOk && fridgeItems.length) {
-      setDispensingItem('Ouvrez le frigo, prenez les articles sélectionnés puis refermez la porte.');
+      setDispensingItem(fridgeInstructions('unlocking'));
       try {
         const response = await fetch(`${base}/fridge/access`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -233,13 +234,17 @@ function RetailCartPanel({
         });
         const started = await response.json();
         if (!response.ok || !started.ok) throw new Error(started.error || 'Ouverture indisponible');
+        setDispensingItem(fridgeInstructions(started.phase));
         const deadline = Date.now() + 240000;
         let complete = false;
         while (Date.now() < deadline) {
           await new Promise(resolve => setTimeout(resolve, 1000));
           const res = await fetch(`${base}/fridge/status`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: purchaseIdRef.current }) });
           const status = await res.json();
-          if (status.pending) continue;
+          if (res.ok && status.ok && status.pending) {
+            setDispensingItem(fridgeInstructions(status.phase));
+            continue;
+          }
           if (!res.ok || !status.ok || !status.accessCompleted) throw new Error(status.error || 'Fermeture à vérifier');
           complete = true; break;
         }
@@ -622,7 +627,7 @@ function RetailCartPanel({
             <p className="text-3xl font-bold">{settlementMessage ? 'Règlement / Payment' : 'Distribution en cours...'}</p>
             {settlementMessage && <p role="status" className="max-w-3xl whitespace-pre-line px-6 text-center text-2xl leading-relaxed">{settlementMessage}</p>}
             {!settlementMessage && dispensingItem && (
-              <p className="text-xl text-white/80">{dispensingItem}</p>
+              <p role="status" className="px-6 text-center text-2xl font-semibold">{dispensingItem}</p>
             )}
             <Loader2 className="h-10 w-10 animate-spin text-blue-400 mt-4" />
           </div>
@@ -642,7 +647,7 @@ function RetailCartPanel({
             <p className="text-2xl font-semibold">
               {hasRelayItem(cartSnapshotRef.current) ? 'Merci d’avoir refermé le frigo.' : 'Récupérez votre achat au bas de la machine'}
             </p>
-            <ArrowDown className="h-32 w-32 text-green-400 animate-bounce" />
+            {!hasRelayItem(cartSnapshotRef.current) && <ArrowDown className="h-32 w-32 text-green-400 animate-bounce" />}
           </div>
         </div>
       )}

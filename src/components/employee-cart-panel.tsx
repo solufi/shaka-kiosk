@@ -1,4 +1,5 @@
 'use client';
+import {fridgeInstructions} from '@/lib/fridge-instructions';
 import {refundMessage} from '@/lib/payment-settlement';
 import {productSellingCents,productDepositCents} from '@/lib/cart-pricing';
 import {useEffect,useRef,useState} from 'react';
@@ -34,7 +35,27 @@ export function EmployeeCartPanel({cartItems,onRemoveItem,onUpdateQuantity,onCle
    let stopped=false;
    for(const item of quote.items.filter(i=>!i.useRelay)){for(let n=0;n<item.qty;n++){setMessage(`Distribution : ${item.name} (${n+1}/${item.qty})`);const d=await call('vend',{sessionId:quote.id,commandId:`${quote.id}:${item.productId}:${n}`,productId:item.productId,location:item.location,free:start.free});if(d.uncertain)throw Error('Distribution non confirmée : ne relancez pas le retrait.');if(d.dropDetected!==true){stopped=true;break;}}if(stopped)break;}
    const fridge=quote.items.filter(i=>i.useRelay);
-   if(fridge.length&&!stopped){setMessage('Ouvrez le frigo, prenez uniquement les articles sélectionnés, puis refermez la porte.');await call('fridge/access',{sessionId:quote.id,paid:!start.free,items:fridge.map(i=>({productId:i.productId,qty:i.qty}))});let completed=false;const end=Date.now()+200000;while(Date.now()<end&&alive.current){await delay(1000);const d=await call('fridge/status',{sessionId:quote.id});if(d.pending)continue;if(!d.accessCompleted)throw Error('Fermeture du frigo non confirmée : contactez le responsable.');completed=true;break;}if(!completed)throw Error('Accès au frigo à vérifier.');}
+   if (fridge.length && !stopped) {
+    setMessage(fridgeInstructions('unlocking'));
+    const access = await call('fridge/access', {
+     sessionId: quote.id, paid: !start.free, items: fridge.map(i => ({productId:i.productId,qty:i.qty})),
+    });
+    setMessage(fridgeInstructions(access.phase));
+    let completed = false;
+    const end = Date.now() + 200000;
+    while (Date.now() < end && alive.current) {
+     await delay(1000);
+     const status = await call('fridge/status', {sessionId:quote.id});
+     if (status.pending) {
+      setMessage(fridgeInstructions(status.phase));
+      continue;
+     }
+     if (!status.accessCompleted) throw Error('Fermeture du frigo non confirmée. Contactez le responsable.');
+     completed = true;
+     break;
+    }
+    if (!completed) throw Error('Accès au frigo à vérifier.');
+   }
    const result=await finishPayment(quote.id);if(result.status==='review')throw Error('Retrait à vérifier par le responsable.');clearPending();setStage('done');setMessage(refundMessage(result.refund)||(result.status==='complete'?'Votre retrait est confirmé.':`Retrait partiel. Montant encaissé : ${money(result.payment.capturedCents)}.`));onPurchase();
   }catch(e){if(!cancelled.current){setStage('review');setError((e as Error).message);}}
   finally{working.current=false;setBusy(false);}
