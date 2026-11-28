@@ -44,7 +44,17 @@ export async function GET() {
       data = (data || []).map((p:any)=>({...p,quantity:0,stockUnavailable:true}));
     }
   }
-  return NextResponse.json({ ok: true, data: data ?? [] });
+  // Fleet can synchronize the photo under the product ID before inventory has an imageId.
+  const products = data ?? [];
+  const needsPhoto = (p: unknown): p is {id: string; imageId?: string} =>
+    !!p && typeof p === 'object' && 'id' in p && typeof p.id === 'string' && !('imageId' in p && p.imageId);
+  if (products.some(needsPhoto)) {
+    const directory = process.env.SHAKA_PRODUCT_IMAGES_DIR || path.join(process.cwd(), 'public/images/products');
+    const files = await fs.readdir(directory, {withFileTypes:true}).catch(() => []);
+    const localIds = new Set(files.filter(f => f.isFile() && /\.(webp|jpe?g|png|avif|gif)$/.test(f.name)).map(f => path.parse(f.name).name));
+    return NextResponse.json({ok:true, data:products.map(p => needsPhoto(p) && localIds.has(p.id) ? {...p, imageId:p.id} : p)});
+  }
+  return NextResponse.json({ok:true, data:products});
 }
 
 export async function POST(req: Request) {

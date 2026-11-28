@@ -23,6 +23,16 @@ test('admin simulation never enters physical dispensing or payment, and only cle
  await Renderer.act(async()=>{x.button('Terminer le test').props.onClick();});assert.equal(x.purchases(),0);assert.equal(x.clears(),1);
 });
 
+test('an explicit pre-payment maintenance refusal brings the customer back to their cart',async t=>{
+  const terminal=async()=>({ok:false,status:503,json:async()=>({ok:false,error:'Machine in maintenance'})});
+  const x=await mount(t,false,{price:1,terminal});
+  await Renderer.act(async()=>{await x.button('Passer au paiement').props.onClick();});
+  assert.match(JSON.stringify(x.tree.toJSON()),/Aucun paiement lancé/);
+  assert.doesNotMatch(JSON.stringify(x.tree.toJSON()),/Vérification auprès du terminal/);
+  assert.equal(x.clears(),0);
+  assert.equal(x.calls.filter(c=>c.url.endsWith('/pay')).length,1);
+});
+
 test('a reserved reader shows its location and directional arrow on the first payment prompt', async t => {
   for (const [location, icon] of [['la machine de gauche', 'ArrowLeft'], ['Station Shaka-PS', 'ArrowRight']]) {
     await t.test(location, async t => {

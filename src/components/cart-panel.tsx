@@ -387,6 +387,12 @@ function RetailCartPanel({
 
       const data = await res.json();
       if (startingRequest.current !== requestId) return;
+      if (res.status === 503 && data.ok === false && data.error === 'Machine in maintenance') {
+        startingRequest.current = '';
+        setPaymentError('Mise à jour de la machine en cours. Aucun paiement lancé. Votre panier est conservé.');
+        setPaymentState('idle');
+        return;
+      }
       if (data.readerUnavailable) {
         startingRequest.current = '';
         setPaymentError(data.error || 'Terminal occupé. Réessayez dans un instant.');
