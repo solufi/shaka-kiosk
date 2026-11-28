@@ -141,4 +141,21 @@ html, body, body *, body *::before, body *::after {
 @container (max-width:340px) { .catalog-category-pages-label { display:none; } .catalog-pagination { gap:4px; } .catalog-pagination button { padding:6px; font-size:12px; } .catalog-pagination span { display:none; } }
 .catalog-categories.one-row { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:stretch; }
 .catalog-categories.one-row .catalog-categories-heading>button { height:52px; }
+@container (min-width: 600px) {
+  .catalog-categories .catalog-category-button,
+  .catalog-categories .catalog-categories-heading > button {
+    height: clamp(60px, 5cqw, 76px);
+    font-size: clamp(20px, 2cqw, 30px);
+    line-height: 1.1;
+    font-weight: 700;
+    border-width: 2px;
+  }
+  .catalog-categories.one-row .catalog-categories-heading > button {
+    height: clamp(60px, 5cqw, 76px);
+    padding-inline: clamp(16px, 3cqw, 48px);
+  }
+  .catalog-categories button[aria-pressed] > span:last-child {
+    font-size: 0.7em;
+  }
+}
 .catalog-machine-pages.with-cart .sticky { height:calc(100dvh - 108px); max-height:calc(100dvh - 108px); }
