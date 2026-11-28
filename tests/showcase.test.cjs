@@ -68,7 +68,8 @@ test('machine ads rotate the matching local photos, skip missing files, and incl
   await f.tick(8000);assert.equal(current(),source('orange'));
   await f.update([products[0],item('f','Biscuit',{imageId:'biscuit'})]);
   assert.equal(current(),source('cafe'));
-  await f.tick(8000);assert.equal(current(),source('biscuit'));
+  await f.tick(8000);assert.equal(current(),'/Shaka_Transparent.png');
+  await f.tick(4000);assert.equal(current(),source('biscuit'));
   await Renderer.act(()=>f.ui.root.findByType('img').props.onError());
   assert.equal(current(),source('cafe'));
   await f.update([products[3]]);
@@ -79,4 +80,19 @@ test('a machine with only unphotographed stock keeps its configured advertising 
   assert.equal(f.ui.root.findByType('img').props.src,'/Shaka_Transparent.png');
   await f.tick(8000);assert.equal(f.ui.root.findByType('img').props.src,'/ad.jpg');
   await f.tick(4000);assert.equal(f.ui.root.findByType('img').props.src,'/Shaka_Transparent.png');
+});
+
+test('five products lead to a short logo and playback resumes with the next product',async t=>{
+  const products=Array.from({length:7},(_,i)=>item('p'+i,'Chips '+i,{imageId:'photo'+i}));
+  const f=await screen(t,products,false,{images:[]});
+  const current=()=>f.ui.root.findByType('img').props.src;
+  for(let i=0;i<5;i++){
+    assert.equal(current(),'/api/product-images/photo'+i);
+    await f.tick(8000);
+  }
+  assert.equal(current(),'/Shaka_Transparent.png');
+  await f.tick(4000);
+  assert.equal(current(),'/api/product-images/photo5');
+  await f.tick(8000);
+  assert.equal(current(),'/api/product-images/photo6');
 });

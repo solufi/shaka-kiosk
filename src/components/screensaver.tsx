@@ -58,7 +58,7 @@ export function Screensaver({onInteraction,products,layout,preview=false,include
   onInteraction:()=>void;products:ShowcaseProduct[];layout?:DisplayLayout;preview?:boolean;included?:boolean
 }) {
   const [config,setConfig]=useState<Config|null>(null);
-  const [position,setPosition]=useState({id:'',mediaTurn:false,mediaIndex:0,cycle:0});
+  const [position,setPosition]=useState({id:'',mediaTurn:false,mediaIndex:0,cycle:0,logoTurn:false,productsSinceLogo:0});
   useEffect(()=>{
     if(preview)return;
     let active=true;
@@ -85,25 +85,33 @@ export function Screensaver({onInteraction,products,layout,preview=false,include
   const index=found<0?0:found;
   const slide=slides[index];
   const mediaList=config?.enabled===false?[]:(config?.images||[]);
-  const media=candidates.length > 0 && position.mediaTurn && mediaList.length?mediaList[position.mediaIndex%mediaList.length]:undefined;
+  const logoTurn = position.logoTurn && slides.length > 0;
+  const media=!logoTurn && candidates.length > 0 && position.mediaTurn && mediaList.length?mediaList[position.mediaIndex%mediaList.length]:undefined;
   const video=!!media && (media.mediaType==='video'||/\.(mp4|webm|mov|ogg)$/i.test(media.filename));
   const nextId=slides[(index+1)%Math.max(1,slides.length)]?.product.id;
   const insertMedia=!!mediaList.length && candidates.length > 0 && (!slide || index===slides.length-1);
   function next(){
-    setPosition(p=>({
-      id:(media?slides[0]?.product.id:nextId)||'',mediaTurn:!media && insertMedia,
-      mediaIndex:p.mediaIndex+(media?1:0),cycle:p.cycle+1
-    }));
+    setPosition(p=>{
+      if (p.cycle !== position.cycle) return p;
+      if (logoTurn) return {...p,logoTurn:false,cycle:p.cycle+1};
+      const productsSinceLogo = p.productsSinceLogo + (slide && !media ? 1 : 0);
+      const showLogo = productsSinceLogo >= 5;
+      return {
+        id:(media?slides[0]?.product.id:nextId)||'',mediaTurn:!media && insertMedia,
+        mediaIndex:p.mediaIndex+(media?1:0),cycle:p.cycle+1,
+        logoTurn:showLogo,productsSinceLogo:showLogo?0:productsSinceLogo
+      };
+    });
   }
-  const duration=media?Math.max(1,Math.min(120,Number(config?.durationSeconds)||5)):8;
+  const duration=logoTurn?4:media?Math.max(1,Math.min(120,Number(config?.durationSeconds)||5)):8;
   useEffect(()=>{
-    if((!slide && !insertMedia) || video)return;
+    if(!slide && !insertMedia)return;
     const timer=setTimeout(next,duration*1000);
     return ()=>clearTimeout(timer);
-  },[slide?.product.id,slides[0]?.product.id,nextId,insertMedia,media?.id,video,duration,position.cycle]);
+  },[slide?.product.id,slides[0]?.product.id,nextId,insertMedia,media?.id,duration,position.cycle]);
   const action=preview?'Revenir au mode test':'Touchez l’écran pour commencer';
-  const product=slide?.product;
-  return <button type="button" className="shaka-showcase" data-theme={media?'media':slide?.kind||'brand'} onClick={onInteraction} aria-label={action}>
+  const product=logoTurn?undefined:slide?.product;
+  return <button type="button" className="shaka-showcase" data-theme={logoTurn?'brand':media?'media':slide?.kind||'brand'} onClick={onInteraction} aria-label={action}>
     {media?<div className="showcase-media" key={media.id}>
       {video?<video src={media.url} autoPlay muted playsInline onEnded={next} onError={next}/>:<img src={media.url} alt="" onError={next}/>}
       {(config?.overlayTitle || config?.overlaySubtitle) && <div className="showcase-caption" style={{color:config?.overlayColor}}>{config?.overlayTitle && !/^touchez l.écran pour commencer$/i.test(config.overlayTitle) && <strong>{config.overlayTitle}</strong>}<span>{config?.overlaySubtitle}</span></div>}
