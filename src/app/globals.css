@@ -118,7 +118,25 @@ html, body, body *, body *::before, body *::after {
 .catalog-category-buttons { display:flex; gap:8px; }
 .catalog-category-button { flex:1; min-width:0; height:52px; padding:6px 10px; white-space:normal; line-height:18px; gap:8px; }
 .catalog-pagination { display:flex; flex:none; align-items:center; justify-content:space-between; gap:10px; padding-top:2px; }
-.catalog-pagination button { min-height:44px; }
+.catalog-pagination button {
+  min-height: clamp(48px, 4cqw, 66px);
+  min-width: clamp(96px, 18cqw, 250px);
+  padding-inline: clamp(10px, 2cqw, 28px);
+  border: 2px solid #402078;
+  background: #563092;
+  color: #fff;
+  font-size: clamp(17px, 1.7cqw, 26px);
+  font-weight: 700;
+}
+.catalog-pagination button:enabled:hover,
+.catalog-pagination button:enabled:active { background: #402078; color: #fff; }
+.catalog-pagination button:disabled {
+  background: #e5e3e9;
+  border-color: #b9b4c4;
+  color: #4c4658;
+  opacity: 1;
+}
+.catalog-pagination strong { font-size: clamp(14px, 1.4cqw, 21px); }
 .catalog-product-card { min-width:0; min-height:0; height:100%; }
 .catalog-product-card .catalog-product-trigger { display:flex; flex:1; flex-direction:column; min-height:0; }
 .catalog-product-card .catalog-product-header { display:flex; flex:1; min-height:0; padding:0; }
@@ -144,7 +162,7 @@ html, body, body *, body *::before, body *::after {
 }
 .catalog-machine-pages>div { min-width:0; grid-column:auto!important; }
 @media (min-width:700px) { .catalog-machine-pages.with-cart { grid-template-columns:minmax(0,1fr) minmax(240px,30%); gap:16px; } }
-@container (max-width:340px) { .catalog-category-pages-label { display:none; } .catalog-pagination { gap:4px; } .catalog-pagination button { padding:6px; font-size:12px; } .catalog-pagination span { display:none; } }
+@container (max-width:340px) { .catalog-category-pages-label { display:none; } .catalog-pagination { gap:4px; } .catalog-pagination button { min-width:0; padding:6px; font-size:14px; } .catalog-pagination span { display:none; } }
 .catalog-categories.one-row { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:stretch; }
 .catalog-categories.one-row .catalog-categories-heading>button { height:52px; }
 @container (min-width: 600px) {
